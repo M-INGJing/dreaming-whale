@@ -50,6 +50,10 @@ module.exports = function register(router) {
         windows: clock.normalizeWindows(night.windows),
         nextWakeMinutes: clock.nextWindowIn(night.windows, now),
         diary: biliStore.diarySummary(runtime.config, now),
+        style: (() => {
+          const data = biliStore.readJson(biliStore.paths(runtime.config).style, {});
+          return { items: Array.isArray(data.items) ? data.items.length : 0, updatedAt: Number(data.updatedAt) || 0 };
+        })(),
         share: (() => {
           const ledger = outbox.readLedger(runtime.config);
           const today = outbox.dayKey(now);
