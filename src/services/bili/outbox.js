@@ -89,30 +89,40 @@ function canShare(config, opts = {}) {
   if (gapMs && ledger.lastAt && now.getTime() - ledger.lastAt < gapMs) {
     return { ok: false, reason: 'gap' };
   }
-  const target = pickTarget(config, now, ledger, opts.masterWxid);
-  if (!target) return { ok: false, reason: 'no_target' };
-  return { ok: true, reason: '', target };
+  const targets = pickTargets(config, now, ledger, opts.masterWxid);
+  if (!targets.length) return { ok: false, reason: 'no_target' };
+  return { ok: true, reason: '', targets, target: targets[0] };
 }
 
-function pickTarget(config, now, ledger, masterOverride = '') {
+/**
+ * 一次分享要发到哪些地方：主人私聊（如果配了/能反查到）+ 白名单群里还有额度的。
+ * 返回数组；调用方按数组逐条入队（同一条视频可以既发主人也发指定群）。
+ */
+function pickTargets(config, now, ledger, masterOverride = '') {
+  const targets = [];
   const today = dayKey(now);
   const master = String(masterOverride || '').trim() || masterWxid(config);
   if (master) {
     const names = (config && config.persona && config.persona.master && config.persona.master.names) || [];
     const name = String(Array.isArray(names) ? names[0] || '' : '').trim();
-    return { chatType: 'private', chatId: master, name };
+    targets.push({ chatType: 'private', chatId: master, name });
   }
   const share = shareConfig(config);
   for (const entry of Array.isArray(share.chats) ? share.chats : []) {
     const chatId = String((entry && entry.chatId) || '').trim();
     if (!chatId) continue;
+    if (targets.some((t) => t.chatId === chatId)) continue;
     const limit = Math.max(1, Number(entry.daily) || 1);
     const used = ledger.chats && ledger.chats[chatId] && ledger.chats[chatId].date === today
       ? Number(ledger.chats[chatId].count) || 0 : 0;
     if (used >= limit) continue;
-    return { chatType: 'group', chatId, name: String(entry.name || '').trim() };
+    targets.push({ chatType: 'group', chatId, name: String(entry.name || '').trim() });
   }
-  return null;
+  return targets;
+}
+
+function pickTarget(config, now, ledger, masterOverride = '') {
+  return pickTargets(config, now, ledger, masterOverride)[0] || null;
 }
 
 /** 入队（同 BV 已在队列里 / 已分享过 → 忽略）。 */
@@ -122,9 +132,15 @@ function enqueue(config, job) {
   const target = job && job.target;
   if (!bvid || !text || !target || !target.chatId) return { ok: false, reason: 'bad_job' };
   const ledger = readLedger(config);
-  if (ledger.sent.some((row) => row && row.bvid === bvid)) return { ok: false, reason: 'already_shared' };
+  const chatId = String(target.chatId);
+  // 同一 BV 对同一个目标只发一次（换目标——比如再从私聊发到群里——是允许的）
+  if (ledger.sent.some((row) => row && row.bvid === bvid && (row.chatId === chatId || !row.chatId))) {
+    return { ok: false, reason: 'already_shared' };
+  }
   const items = readOutbox(config);
-  if (items.some((row) => row && row.bvid === bvid && row.status !== 'failed')) return { ok: false, reason: 'already_queued' };
+  if (items.some((row) => row && row.bvid === bvid && row.chatId === chatId && row.status !== 'failed')) {
+    return { ok: false, reason: 'already_queued' };
+  }
   const item = {
     id: crypto.randomUUID(),
     at: Date.now(),
@@ -178,7 +194,7 @@ function ack(config, id, status, error = '', now = new Date()) {
       const prev = chats[item.chatId] && chats[item.chatId].date === today ? Number(chats[item.chatId].count) || 0 : 0;
       chats[item.chatId] = { date: today, count: prev + 1 };
     }
-    const sent = [...ledger.sent, { bvid: item.bvid, at: now.getTime() }].slice(-MAX_SENT_MEMORY);
+    const sent = [...ledger.sent, { bvid: item.bvid, chatId: item.chatId, at: now.getTime() }].slice(-MAX_SENT_MEMORY);
     writeLedger(config, {
       date: today,
       dayCount: (ledger.date === today ? ledger.dayCount : 0) + 1,
@@ -211,5 +227,5 @@ function sweepStale(config, now = Date.now(), ttlMs = 10 * 60000) {
 
 module.exports = {
   OUTBOX_FILE, SHARE_FILE, files, readLedger, dayKey, shareConfig, masterWxid,
-  canShare, pickTarget, enqueue, nextPending, claim, ack, sweepStale,
+  canShare, pickTarget, pickTargets, enqueue, nextPending, claim, ack, sweepStale,
 };

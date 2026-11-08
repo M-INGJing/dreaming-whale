@@ -167,6 +167,53 @@ test('canShare：显式传入 masterWxid 时按主人私聊分享', () => {
   assert.equal(t.target.chatType, 'private');
 });
 
+test('canShare：主人私聊 + 白名单群会同时作为目标（私聊在前）', () => {
+  const { config } = makeConfig({ share: { chats: [{ chatId: 'example-group@chatroom', name: '某个群', daily: 1 }] } });
+  const v = outbox.canShare(config, { score: 99, now });
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.targets.map((t) => t.chatType), ['private', 'group']);
+  assert.equal(v.target.chatId, 'wxid_owner', 'target 兼容字段仍指向第一个');
+});
+
+test('enqueue：同一条视频可以分别发到私聊和群（按 chatId 去重）', () => {
+  const { config } = makeConfig({ share: { chats: [{ chatId: 'example-group@chatroom', name: '某个群', daily: 1 }] } });
+  const targets = outbox.pickTargets(config, now, outbox.readLedger(config));
+  assert.equal(outbox.enqueue(config, { bvid: 'BV1xx411c7mD', title: 'T', text: 'x', target: targets[0] }).ok, true);
+  assert.equal(outbox.enqueue(config, { bvid: 'BV1xx411c7mD', title: 'T', text: 'x', target: targets[1] }).ok, true);
+  assert.equal(outbox.enqueue(config, { bvid: 'BV1xx411c7mD', title: 'T', text: 'x', target: targets[1] }).reason, 'already_queued');
+});
+
+test('调度器：一次醒着会按目标逐条入队（私聊 + 白名单群）', async () => {
+  const fs2 = fs;
+  const root = fs2.mkdtempSync(path.join(os.tmpdir(), 'bili-p2-sched-'));
+  const config = {
+    paths: { dataDir: path.join(root, 'data') },
+    persona: { master: { wxids: ['wxid_owner'], names: ['主人'] } },
+    features: { bili: true },
+    bili: {
+      preferences: { like: ['猫'], dislike: [] },
+      night: { windows: [{ start: '00:00', end: '23:59', wakes: 1 }], skipChance: 0, maxVideos: 5, maxWakesPerDay: 1, maxMinutes: 45 },
+      risk: { readHourly: 120, readDaily: 400 },
+      share: { enabled: true, minScore: 0, daily: 3, minGapMinutes: 0, silentAfterDays: 3, chats: [{ chatId: 'example-group@chatroom', name: '某个群', daily: 1 }] },
+      diary: { enabled: true },
+    },
+  };
+  const { createBiliScheduler } = require('../src/services/bili/scheduler');
+  const sched = createBiliScheduler({
+    config,
+    now: () => now,
+    fetchFeed: async () => ({ source: 'rcmd', items: [{ bvid: 'BV1xx411c7mD', title: '猫猫', durationSec: 60, pubdate: 0, stat: { view: 1000000 } }] }),
+    readVideo: async () => '【B站视频】猫猫',
+    writeDiary: async () => ({ ownerChars: 1, selfChars: 1, usedModel: false }),
+  });
+  const out = await sched.runRound({ dry: false, now });
+  assert.equal(out.ok, true);
+  assert.equal(out.share.length, 2, '私聊 + 群各一条');
+  const items = JSON.parse(fs2.readFileSync(path.join(root, 'data', 'bili', 'outbox.json'), 'utf8')).items;
+  assert.deepEqual(items.map((i) => i.chatType).sort(), ['group', 'private']);
+  fs2.rmSync(root, { recursive: true, force: true });
+});
+
 test('composeShare：没有模型走模板；群文案更短且带链接', async () => {
   const candidate = { bvid: 'BV1xx411c7mD', title: '猫猫日常', durationSec: 600, owner: { name: 'UP' } };
   const a = await share.composeShare({ llm: null, candidate, chatType: 'private' });

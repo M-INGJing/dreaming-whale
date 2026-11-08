@@ -167,19 +167,25 @@ function createBiliScheduler(opts = {}) {
           score: best ? best.score : 0, now, silentDays: 0, masterWxid: resolveMasterWxid(runtime, cfg),
         });
         if (verdict.ok && best) {
-          const composed = await shareService.composeShare({
-            llm: runtime && runtime.llm,
-            candidate: best.candidate,
-            digest: (watched[0] && watched[0].digest) || '',
-            chatType: verdict.target.chatType,
-            logger,
-          });
-          share = outbox.enqueue(cfg, {
-            bvid: best.candidate.bvid,
-            title: best.candidate.title,
-            text: composed.text,
-            target: verdict.target,
-          });
+          const items = [];
+          // 每个目标一条文案（群更短），同一条视频可以既发主人也发指定群
+          for (const target of verdict.targets) {
+            const composed = await shareService.composeShare({
+              llm: runtime && runtime.llm,
+              candidate: best.candidate,
+              digest: (watched[0] && watched[0].digest) || '',
+              chatType: target.chatType,
+              logger,
+            });
+            const queued = outbox.enqueue(cfg, {
+              bvid: best.candidate.bvid,
+              title: best.candidate.title,
+              text: composed.text,
+              target,
+            });
+            if (queued.ok) items.push({ id: queued.item.id, chatType: queued.item.chatType, chatId: queued.item.chatId });
+          }
+          share = items.length ? { ok: true, items } : null;
         } else {
           biliStore.appendEvent(cfg, { kind: 'share_skip', reason: verdict.reason });
         }
@@ -197,12 +203,13 @@ function createBiliScheduler(opts = {}) {
       })));
       biliStore.appendEvent(cfg, {
         kind: 'wake', source: feed.source, picked: ranked.length, watched: watched.map((w) => w.candidate.bvid),
-        ownerChars: diary.ownerChars, selfChars: diary.selfChars, share: share && share.ok ? 'queued' : 'none',
+        ownerChars: diary.ownerChars, selfChars: diary.selfChars,
+        share: share && share.ok ? 'queued:' + share.items.length : 'none',
       });
       return {
         ok: true, dry: false, source: feed.source,
         picked: ranked.map((row) => row.candidate.bvid), watched: watched.map((w) => w.candidate.bvid),
-        diary, share: share && share.ok ? { id: share.item.id, chatType: share.item.chatType } : null,
+        diary, share: share && share.ok ? share.items : null,
       };
     } finally {
       running = false;
