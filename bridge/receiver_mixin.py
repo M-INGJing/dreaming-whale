@@ -157,7 +157,7 @@ class ReceiverMixin:
             raw, frames = preview
             try:
                 from sticker_collect import collect_async
-                collect_async(self, msg, raw, log=G.log)
+                collect_async(self, msg, raw, log=G.log, http=G.LOCAL_HTTP)
             except Exception as _exc:  # noqa: BLE001 - 收藏失败绝不影响识别/回话
                 # 静默失败会让「为什么没收藏」变成玄学：留一条节流日志，只记异常类型
                 G.log_throttled('sticker-collect:' + type(_exc).__name__,

@@ -61,8 +61,12 @@ def submit(post_json, raw, chat_type, chat_id, sender, log=None):
     return out
 
 
-def collect_async(runtime, msg, raw, log=None):
-    """从收到的 emoji 消息里异步收一张；任何异常都不允许影响收消息。"""
+def collect_async(runtime, msg, raw, log=None, http=None):
+    """从收到的 emoji 消息里异步收一张；任何异常都不允许影响收消息。
+
+    http 由调用方注入（engine.LOCAL_HTTP 是模块级全局，不在 runtime 上；
+    上一版在这里取 runtime.LOCAL_HTTP，结果每张都 AttributeError）。
+    """
     try:
         if not raw:
             return
@@ -81,8 +85,14 @@ def collect_async(runtime, msg, raw, log=None):
 
     def run():
         try:
+            client = http or getattr(runtime, 'LOCAL_HTTP', None)
+            if client is None:
+                if log:
+                    log('表情包收藏：没有可用的 HTTP 客户端，跳过')
+                return
+
             def post_json(path, payload):
-                resp = runtime.LOCAL_HTTP.post(
+                resp = client.post(
                     runtime.sticker_base + path,
                     json=payload,
                     headers=runtime.sticker_headers,

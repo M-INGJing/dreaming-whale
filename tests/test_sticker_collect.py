@@ -110,5 +110,28 @@ class StickerCollect(unittest.TestCase):
         self.assertEqual(payload['chatType'], 'private')
 
 
+    def test_collect_async_uses_injected_http_when_runtime_lacks_local_http(self):
+        # 回归：engine.LOCAL_HTTP 是模块级全局，不在 runtime 上；上一版取 runtime.LOCAL_HTTP 直接 AttributeError
+        class Bare:
+            sticker_base = 'http://127.0.0.1:8787'
+            sticker_headers = {'x-bot-token': 't'}
+
+        posts = []
+
+        class Http:
+            def post(self, url, json=None, headers=None, timeout=None):
+                posts.append((url, json))
+                return type('R', (), {'status_code': 200, 'json': lambda self: {'ok': True}}) ()
+
+        msg = {'username': 'wxid_a', 'sender_username': 'wxid_a'}
+        collect_async(Bare(), msg, png_bytes(True), http=Http())
+        import time
+        for _ in range(50):
+            if posts:
+                break
+            time.sleep(0.02)
+        self.assertTrue(posts, '注入的 http 必须被用上')
+
+
 if __name__ == '__main__':
     unittest.main()
