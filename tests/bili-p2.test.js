@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const outbox = require('../src/services/bili/outbox');
 const share = require('../src/services/bili/share');
+const { resolveMasterWxid } = require('../src/services/bili/scheduler');
 
 function makeConfig(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bili-p2-'));
@@ -132,6 +133,38 @@ test('sweepStale：sending 超过 10 分钟自动标失败，避免卡死', () =
   const items = JSON.parse(fs.readFileSync(path.join(config.paths.dataDir, 'bili', 'outbox.json'), 'utf8')).items;
   assert.equal(items[0].status, 'failed');
   assert.equal(items[0].error, 'timeout');
+});
+
+test('resolveMasterWxid：配置优先；没配置时从记忆私聊反查（只认 master.names）', () => {
+  const { config } = makeConfig();
+  assert.equal(resolveMasterWxid(null, config), 'wxid_owner');
+
+  const empty = makeConfig();
+  empty.config.persona.master.wxids = [];
+  const runtime = {
+    store: {
+      sessions: new Map([
+        ['wechat:u:wxid_stranger', {}],
+        ['wechat:u:wxid_themaster', {}],
+        ['wechat:g:example-group@chatroom', {}],
+      ]),
+      messages: (key) => (key === 'wechat:u:wxid_themaster'
+        ? [{ role: 'user', name: '主人' }]
+        : [{ role: 'user', name: '路人' }]),
+    },
+  };
+  assert.equal(resolveMasterWxid(runtime, empty.config), 'wxid_themaster');
+  runtime.store.messages = () => [{ role: 'user', name: '路人' }];
+  assert.equal(resolveMasterWxid(runtime, empty.config), '', '名字对不上就宁可不发');
+});
+
+test('canShare：显式传入 masterWxid 时按主人私聊分享', () => {
+  const { config } = makeConfig();
+  config.persona.master.wxids = [];
+  const t = outbox.canShare(config, { score: 99, now, masterWxid: 'wxid_resolved' });
+  assert.equal(t.ok, true);
+  assert.equal(t.target.chatId, 'wxid_resolved');
+  assert.equal(t.target.chatType, 'private');
 });
 
 test('composeShare：没有模型走模板；群文案更短且带链接', async () => {

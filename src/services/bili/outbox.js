@@ -89,14 +89,14 @@ function canShare(config, opts = {}) {
   if (gapMs && ledger.lastAt && now.getTime() - ledger.lastAt < gapMs) {
     return { ok: false, reason: 'gap' };
   }
-  const target = pickTarget(config, now, ledger);
+  const target = pickTarget(config, now, ledger, opts.masterWxid);
   if (!target) return { ok: false, reason: 'no_target' };
   return { ok: true, reason: '', target };
 }
 
-function pickTarget(config, now, ledger) {
+function pickTarget(config, now, ledger, masterOverride = '') {
   const today = dayKey(now);
-  const master = masterWxid(config);
+  const master = String(masterOverride || '').trim() || masterWxid(config);
   if (master) {
     const names = (config && config.persona && config.persona.master && config.persona.master.names) || [];
     const name = String(Array.isArray(names) ? names[0] || '' : '').trim();

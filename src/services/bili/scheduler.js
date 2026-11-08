@@ -24,6 +24,29 @@ function biliConfig(config) {
   return (config && config.bili) || {};
 }
 
+/**
+ * 主人的 wxid：优先 config.persona.master.wxids；
+ * 没填时从记忆里的私聊会话反查（找最近说过话、名字在 master.names 里的那个私聊）。
+ * 反查只是「知道该发给谁」，不改配置；分享目标仍然只允许主人私聊或白名单群。
+ */
+function resolveMasterWxid(runtime, config) {
+  const ids = (config && config.persona && config.persona.master && config.persona.master.wxids) || [];
+  const configured = String(Array.isArray(ids) ? ids[0] || '' : '').trim();
+  if (configured) return configured;
+  const names = ((config && config.persona && config.persona.master && config.persona.master.names) || [])
+    .map((n) => String(n || '').trim()).filter(Boolean);
+  if (!names.length || !runtime || !runtime.store) return '';
+  try {
+    for (const key of runtime.store.sessions.keys()) {
+      if (!String(key).startsWith('wechat:u:')) continue;
+      const chatId = String(key).slice('wechat:u:'.length);
+      const msgs = runtime.store.messages(key, 20) || [];
+      if (msgs.some((m) => m && m.role === 'user' && names.includes(String(m.name || '').trim()))) return chatId;
+    }
+  } catch { /* 记忆读不到就当没配置 */ }
+  return '';
+}
+
 function nightOf(config) {
   const b = biliConfig(config);
   return (b.night) || {};
@@ -140,7 +163,9 @@ function createBiliScheduler(opts = {}) {
       try {
         outbox.sweepStale(cfg);
         const best = ranked[0];
-        const verdict = outbox.canShare(cfg, { score: best ? best.score : 0, now, silentDays: 0 });
+        const verdict = outbox.canShare(cfg, {
+          score: best ? best.score : 0, now, silentDays: 0, masterWxid: resolveMasterWxid(runtime, cfg),
+        });
         if (verdict.ok && best) {
           const composed = await shareService.composeShare({
             llm: runtime && runtime.llm,
@@ -215,4 +240,4 @@ function createBiliScheduler(opts = {}) {
   return { start, stop, tick, runRound, decision, loadState, loadQuota };
 }
 
-module.exports = { createBiliScheduler, TICK_MS };
+module.exports = { createBiliScheduler, resolveMasterWxid, TICK_MS };
