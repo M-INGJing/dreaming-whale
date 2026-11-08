@@ -155,9 +155,20 @@ class ReceiverMixin:
                 G.log('表情包读取失败：本地缓存不可解码，且消息没有可取得的原图')
                 return ''
             raw, frames = preview
+            # 收藏要用原图（GIF 保动画）；拿不到才退回识图用的预览 PNG
+            collect_raw = raw
+            collect_mime = 'image/png'
+            try:
+                from emoji_vision import guess_mime, load_original
+                original = load_original(self.db.account_dir, msg.get('content'), allow_network=False)
+                if original:
+                    collect_raw = original
+                    collect_mime = guess_mime(original)
+            except Exception:  # noqa: BLE001 - 取原图失败就用预览
+                collect_raw = raw
             try:
                 from sticker_collect import collect_async
-                collect_async(self, msg, raw, log=G.log, http=G.LOCAL_HTTP)
+                collect_async(self, msg, collect_raw, log=G.log, http=G.LOCAL_HTTP, mime=collect_mime)
             except Exception as _exc:  # noqa: BLE001 - 收藏失败绝不影响识别/回话
                 # 静默失败会让「为什么没收藏」变成玄学：留一条节流日志，只记异常类型
                 G.log_throttled('sticker-collect:' + type(_exc).__name__,

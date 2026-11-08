@@ -27,6 +27,13 @@ def png_bytes(pattern):
     return out.getvalue()
 
 
+def gif_bytes():
+    frames = [Image.new('RGB', (64, 64), c) for c in ('red', 'blue')]
+    out = io.BytesIO()
+    frames[0].save(out, format='GIF', save_all=True, append_images=frames[1:], duration=100, loop=0)
+    return out.getvalue()
+
+
 class FakeRuntime:
     def __init__(self, response):
         self.response = response
@@ -131,6 +138,41 @@ class StickerCollect(unittest.TestCase):
                 break
             time.sleep(0.02)
         self.assertTrue(posts, '注入的 http 必须被用上')
+
+
+    def test_submit_posts_mime_for_gif(self):
+        captured = []
+
+        def post_json(path, payload):
+            captured.append(payload)
+            return {'ok': True, 'duplicate': True}
+
+        gif = gif_bytes()
+        submit(post_json, gif, 'private', 'wxid_a', '', mime='image/gif')
+        self.assertEqual(captured[0]['mime'], 'image/gif')
+        self.assertEqual(base64.b64decode(captured[0]['image']), gif)
+
+    def test_guess_mime_by_magic(self):
+        import emoji_vision
+
+        self.assertEqual(emoji_vision.guess_mime(b'GIF89a....'), 'image/gif')
+        self.assertEqual(emoji_vision.guess_mime(b'\x89PNG\r\n\x1a\n....'), 'image/png')
+        self.assertEqual(emoji_vision.guess_mime(b'\xff\xd8\xff\xe0....'), 'image/jpeg')
+
+    def test_load_original_prefers_animation(self):
+        import emoji_vision
+
+        original_attrs = emoji_vision.attributes
+        original_sources = emoji_vision.sources
+        try:
+            emoji_vision.attributes = lambda content: {'md5': 'a' * 32}
+            emoji_vision.sources = lambda *a, **k: iter([gif_bytes()])
+            out = emoji_vision.load_original('', 'x')
+            self.assertIsNotNone(out)
+            self.assertEqual(emoji_vision.guess_mime(out), 'image/gif')
+        finally:
+            emoji_vision.attributes = original_attrs
+            emoji_vision.sources = original_sources
 
 
 if __name__ == '__main__':

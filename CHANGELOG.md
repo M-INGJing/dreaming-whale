@@ -77,6 +77,12 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 收藏的动图变静图
+
+- 原因：收藏时存的是识图用的「预览拼接图」（多帧拼成一张 PNG），不是原始表情文件。
+- 桥接新增 `emoji_vision.load_original()`：优先取缓存/网络里的原图（GIF/WEBP 保动画），拿不到才退回预览图；按魔术字节判断 mime，再按格式落盘（`.gif`/`.png`/`.webp`）。
+- 旧的已收藏动图无法还原（存的时候就已经是静态拼图），删除后重发一次即可按原格式重收。
+
 ### 新增 · 收藏别人发的表情包（去重 + 自动分类）
 
 - 只收表情包消息（微信 emoji），私聊/群聊都收（含主人自己发的），落盘 `data/stickers/待定/<sha12>.<ext>`。

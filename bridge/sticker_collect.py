@@ -33,12 +33,12 @@ def fingerprint(raw):
     return sha, dhash
 
 
-def submit(post_json, raw, chat_type, chat_id, sender, log=None):
+def submit(post_json, raw, chat_type, chat_id, sender, log=None, mime='image/png'):
     """提交一张候选；返回内核响应（失败返回 {}）。post_json(path, payload) 由调用方注入。"""
     sha, dhash = fingerprint(raw)
     payload = {
         'image': base64.b64encode(raw).decode('ascii'),
-        'mime': 'image/png',
+        'mime': mime or 'image/png',
         'sha256': sha,
         'dhash': dhash,
         'chatType': 'group' if chat_type == 'group' else 'private',
@@ -61,7 +61,7 @@ def submit(post_json, raw, chat_type, chat_id, sender, log=None):
     return out
 
 
-def collect_async(runtime, msg, raw, log=None, http=None):
+def collect_async(runtime, msg, raw, log=None, http=None, mime='image/png'):
     """从收到的 emoji 消息里异步收一张；任何异常都不允许影响收消息。
 
     http 由调用方注入（engine.LOCAL_HTTP 是模块级全局，不在 runtime 上；
@@ -100,7 +100,7 @@ def collect_async(runtime, msg, raw, log=None, http=None):
                 )
                 return resp.json() if getattr(resp, 'status_code', 0) == 200 else {}
 
-            submit(post_json, raw, chat_type, chat_id, sender, log=log)
+            submit(post_json, raw, chat_type, chat_id, sender, log=log, mime=mime)
         except Exception as exc:  # noqa: BLE001
             if log:
                 log('表情包收藏：后台提交异常 %r' % (exc,))

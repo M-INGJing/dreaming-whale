@@ -86,6 +86,45 @@ def sources(account_dir, attrs, digest, allow_network, fetch):
             continue
 
 
+def guess_mime(data):
+    """按魔术字节判断类型；收藏时要按原格式落盘，不能一律当 PNG。"""
+    raw = bytes(data or b'')
+    if raw[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if raw[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if raw[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if raw[:4] == b'RIFF' and raw[8:12] == b'WEBP':
+        return 'image/webp'
+    return 'image/png'
+
+
+def load_original(account_dir, content, allow_network=False, fetch=None):
+    """取原始表情文件（GIF 保动画、WEBP 保透明）；拿不到返回 None。
+
+    load_preview 为了识图会把多帧拼成一张 PNG —— 收藏不能存那张，否则动图变静图。
+    """
+    attrs = attributes(content)
+    digest = attrs.get('md5', '').lower()
+    if not re.fullmatch(r'[0-9a-f]{32}', digest):
+        return None
+    from PIL import Image
+    for data in sources(account_dir, attrs, digest, allow_network, fetch or fetch_asset):
+        if not data or len(data) > MAX_BYTES:
+            continue
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                if image.width * image.height > 16_000_000:
+                    continue
+                if getattr(image, 'n_frames', 1) > 500:
+                    continue
+                return data
+        except (OSError, ValueError, EOFError, Image.DecompressionBombError):
+            continue
+    return None
+
+
 def load_preview(account_dir, content, allow_network=False, fetch=None):
     attrs = attributes(content)
     digest = attrs.get('md5', '').lower()
