@@ -32,6 +32,7 @@ function paths(config) {
     diaryOwner: path.join(dir, 'diary', 'owner.md'),
     diarySelf: path.join(dir, 'diary', 'self.md'),
     style: path.join(dir, 'style.json'),
+    titles: path.join(dir, 'titles.json'),
     feedDir: path.join(dir, 'feed'),
   };
 }
@@ -146,7 +147,26 @@ function readDiaries(config) {
   return { owner: readText(p.diaryOwner), self: readText(p.diarySelf) };
 }
 
+/** 视频标题缓存：bvid → 标题。老日志里只有 BV 号，靠它补标题。 */
+function readTitles(config) {
+  const data = readJson(paths(config).titles, {});
+  return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+}
+
+function mergeTitles(config, map) {
+  const current = readTitles(config);
+  let changed = 0;
+  for (const [bvid, title] of Object.entries(map || {})) {
+    const key = String(bvid || '').trim();
+    const text = String(title || '').trim().slice(0, 200);
+    if (!key || !text) continue;
+    if (current[key] !== text) { current[key] = text; changed += 1; }
+  }
+  if (changed) writeJson(paths(config).titles, current);
+  return changed;
+}
+
 module.exports = {
   REL, paths, rootOf, readJson, writeJson, readText, appendEvent, appendFeedLog,
-  appendDiary, diarySummary, readDiaries,
+  appendDiary, diarySummary, readDiaries, readTitles, mergeTitles,
 };

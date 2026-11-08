@@ -57,6 +57,19 @@ test('listDays：把日记、看过的视频（标题来自 feed 日志）、分
   fs.rmSync(path.dirname(config.paths.dataDir), { recursive: true, force: true });
 });
 
+test('listDays：feed 日志没有标题时用 titles.json 缓存补上', () => {
+  const { config } = tmpConfig();
+  biliStore.appendDiary(config, 'owner', d2, '今天看了 AI 视频。');
+  biliStore.appendFeedLog(config, d2, [{ bvid: 'BV3xx411c7mD', score: 7, watched: true }]);
+  biliStore.mergeTitles(config, { BV3xx411c7mD: 'AI 实测（补的标题）' });
+  const p = biliStore.paths(config);
+  fs.writeFileSync(p.events, JSON.stringify({ at: d2.toISOString(), kind: 'wake', watched: ['BV3xx411c7mD'] }) + '\n');
+
+  const out = diaryView.listDays(config, { days: 10 });
+  assert.equal(out.days[0].watched[0].title, 'AI 实测（补的标题）');
+  fs.rmSync(path.dirname(config.paths.dataDir), { recursive: true, force: true });
+});
+
 test('listDays：没有日记时返回空数组（不报错）', () => {
   const { config } = tmpConfig();
   const out = diaryView.listDays(config, { days: 10 });

@@ -77,6 +77,12 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 日记界面用 BV 号代替标题
+
+- feed 日志从本轮开始才记标题，老记录只有 BV 号；新增 `data/bili/titles.json` 标题缓存，调度器每轮写入，`diaryView` 在 feed 缺标题时回退到缓存。
+- 对已有记录做了一次性补标题（10 条全部补上，如《AI为何开始欺骗人类｜OpenAI智能体失控事件》）。
+- 界面兜底格式改为「（标题暂缺）BV…」的独立一行，不再出现《BV…》。
+
 ### 改进 · 日记长度/数量上限翻倍，并修复被写坏的 B 站配置
 
 - 日记上限翻倍：`maxCharsPerDay` 1500→**3000**、`digestTokens` 200→**400**、每天自动醒 1→**2** 次；新增 `diary.maxEntriesPerDay`（默认 **4** 段/天，防止手动跑很多次写成流水账）。

@@ -97,6 +97,7 @@ function listDays(config, opts = {}) {
   const owner = splitSections(biliStore.readText(p.diaryOwner));
   const self = splitSections(biliStore.readText(p.diarySelf));
   const events = eventsByDay(config);
+  const titles = biliStore.readTitles(config);
   const dates = new Set([...Object.keys(owner), ...Object.keys(self), ...events.keys()]);
   const limit = Math.max(1, Math.min(200, Number(opts.days) || 60));
   const sorted = [...dates].sort().reverse().slice(0, limit);
@@ -106,7 +107,7 @@ function listDays(config, opts = {}) {
       const feeds = feedMap(config, date);
       const watched = ev.watched.map((bvid) => {
         const row = feeds.get(bvid) || {};
-        return { bvid, title: row.title || '', score: row.score || 0 };
+        return { bvid, title: row.title || titles[bvid] || '', score: row.score || 0 };
       });
       return {
         date,

@@ -209,6 +209,12 @@ function createBiliScheduler(opts = {}) {
       } catch (err) {
         logger?.warn?.('[bili] 评论风格学习失败：' + ((err && err.code) || 'unknown'));
       }
+      // 标题缓存：老日志里只有 BV 号，界面靠它把标题补出来
+      try {
+        biliStore.mergeTitles(cfg, Object.fromEntries(watched.map((w) => [w.candidate.bvid, w.candidate.title])));
+      } catch (err) {
+        logger?.warn?.('[bili] 标题缓存写入失败：' + ((err && err.code) || 'io'));
+      }
       const diary = await writeDiary({ config: cfg, llm: runtime && runtime.llm, logger, date: now, watched });
       // 分享：分数够 + 配额够 + 时间间隔够，才入队；桥接会在 30 秒内取走发送。
       let share = null;
@@ -250,8 +256,7 @@ function createBiliScheduler(opts = {}) {
       const reads = 1 + deep * 3;
       let qa = quota.noteRead(allow.state, reads, now);
       saveQuota(qa);
-      const state = loadState(now);
-      const seen = Array.from(new Set([...(state.seen || []), ...watched.map((w) => w.candidate.bvid)])).slice(-300);
+      const state = loadState(now);      const seen = Array.from(new Set([...(state.seen || []), ...watched.map((w) => w.candidate.bvid)])).slice(-300);
       const next = { ...state, wakes: state.wakes + 1, lastWakeAt: now.getTime(), seen };
       saveState(next);
       biliStore.appendFeedLog(cfg, now, ranked.map((row) => ({

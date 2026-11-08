@@ -435,7 +435,8 @@ public sealed class BiliPage : UserControl, IRefreshable
                 var title = Text(row, "title");
                 var bvid = Text(row, "bvid");
                 var score = row.TryGetProperty("score", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt64() : 0;
-                lines.Add(i + ". 《" + (title.Length > 0 ? title : bvid) + "》" + (score > 0 ? "（评分 " + score + "）" : "") + "\n   https://www.bilibili.com/video/" + bvid + "/");
+                var head = title.Length > 0 ? "《" + title + "》" : "（标题暂缺）" + bvid;
+                lines.Add(i + ". " + head + (score > 0 ? "（评分 " + score + "）" : "") + "\n   https://www.bilibili.com/video/" + bvid + "/");
             }
         }
         else
