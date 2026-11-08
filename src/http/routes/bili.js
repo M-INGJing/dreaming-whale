@@ -120,7 +120,10 @@ module.exports = function register(router) {
   });
   router.get('/api/bili/diary', (runtime, req, res) => {
     const now = new Date();
-    return json(res, 200, { ok: true, summary: biliStore.diarySummary(runtime.config, now) });
+    // 日记视图：哪天、看了哪些视频、两本日记正文；只读聚合，不回 cookie。
+    const days = Number(new URL(req.url, 'http://x').searchParams.get('days') || 60);
+    const view = require('../../services/bili/diaryView').listDays(runtime.config, { days });
+    return json(res, 200, { ok: true, summary: biliStore.diarySummary(runtime.config, now), days: view.days });
   });
 
   // ---- 桥接取分享（两段式：pending → claim → ack）----

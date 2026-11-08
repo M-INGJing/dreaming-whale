@@ -77,6 +77,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 启动器展示 B 站日记与看过的视频
+
+- 新增 `src/services/bili/diaryView.js`：按天聚合两本日记正文、当天看过的视频（标题来自 feed 日志）、分享条数；只读，不写任何文件。
+- `GET /api/bili/diary` 追加 `days`（最近 60 天，新的在前），仍保留计数 `summary`。
+- 启动器 B 站页新增「日记与看过的视频」卡：日期下拉 + 当天看过的视频（标题/评分/链接）+「写给主人」与「只给自己」两段正文。
+- feed 日志开始记录标题（之后看过的视频在界面里显示标题，不再只有 BV 号）。
+- 新增 `tests/bili-diary-view.test.js`(3)：分节、聚合标题/分享数、空数据。
+
 ### 新增 · B 站 cookie 持久化到 config.json（不用每次扫码）
 
 - cookie 读取优先级：`config.bili.cookie` → `data/bili/cookie.json`；扫码成功后内核同时写 config.json，换机/清 `data/` 也不用重扫。

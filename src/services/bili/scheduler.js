@@ -255,7 +255,11 @@ function createBiliScheduler(opts = {}) {
       const next = { ...state, wakes: state.wakes + 1, lastWakeAt: now.getTime(), seen };
       saveState(next);
       biliStore.appendFeedLog(cfg, now, ranked.map((row) => ({
-        bvid: row.candidate.bvid, score: Math.round(row.score), reasons: row.reasons,
+        bvid: row.candidate.bvid,
+        title: row.candidate.title,
+        score: Math.round(row.score),
+        reasons: row.reasons,
+        watched: watched.some((w) => w.candidate.bvid === row.candidate.bvid),
       })));
       biliStore.appendEvent(cfg, {
         kind: 'wake', source: feed.source, picked: ranked.length, watched: watched.map((w) => w.candidate.bvid),

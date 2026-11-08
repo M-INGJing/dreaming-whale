@@ -43,6 +43,9 @@ public sealed class BiliPage : UserControl, IRefreshable
     readonly TextBox gapBox = new() { Text = "120", Width = 70 };
     readonly TextBox chatsBox = new() { Height = 64, AcceptsReturn = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Width = 420 };
     readonly CheckBox shareOn = new() { Content = "主动分享到微信" };
+    readonly ComboBox dayBox = new() { Width = 360, HorizontalAlignment = HorizontalAlignment.Left };
+    readonly TextBlock diaryText = new() { TextWrapping = TextWrapping.Wrap, LineHeight = 20 };
+    readonly List<JsonElement> diaryDays = new();
     bool editorsLoaded;
     string pendingSince = "";
 
@@ -125,6 +128,23 @@ public sealed class BiliPage : UserControl, IRefreshable
         panel.Children.Add(statusCard);
         statusText.SetResourceReference(StyleProperty, "Small");
         ((StackPanel)statusCard.Child).Children.Add(statusText);
+
+        // ── 日记与看过的视频 ──
+        var diaryCard = Card("日记与看过的视频", "按天回看：她看了什么、两本日记写了什么。点下拉框切日期。");
+        panel.Children.Add(diaryCard);
+        var diaryInner = (StackPanel)diaryCard.Child;
+        dayBox.Margin = new Thickness(0, 6, 0, 0);
+        dayBox.SelectionChanged += (_, _) => RenderDay(dayBox.SelectedIndex);
+        diaryInner.Children.Add(dayBox);
+        var diaryRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        var diaryReload = new Button { Content = "刷新", MinHeight = 30 };
+        diaryReload.SetResourceReference(StyleProperty, "Ghost");
+        diaryReload.Click += async (_, _) => await LoadDiaryAsync();
+        diaryRow.Children.Add(diaryReload);
+        diaryInner.Children.Add(diaryRow);
+        diaryText.SetResourceReference(StyleProperty, "Small");
+        diaryText.Margin = new Thickness(0, 8, 0, 0);
+        diaryInner.Children.Add(diaryText);
 
         // ── 手动跑一轮 ──
         var runCard = Card("手动跑一轮", "「只看会选什么」不联网读视频、不写日记、不记账；「现在跑一轮」就是它自己醒一次会做的事。");
@@ -285,6 +305,7 @@ public sealed class BiliPage : UserControl, IRefreshable
         var shareCount = res.Prop("share");
         var shares = shareCount.ValueKind == JsonValueKind.Array ? shareCount.GetArrayLength() : 0;
         runResult.Text = "跑完了：读了 " + count + " 条，日记 " + ownerChars + "/" + selfChars + " 字，分享入队 " + shares + " 条。";
+        await LoadDiaryAsync();
         await LoadStyleAsync();
         await RefreshAsync();
     }
@@ -366,6 +387,73 @@ public sealed class BiliPage : UserControl, IRefreshable
         return list;
     }
 
+    async Task LoadDiaryAsync()
+    {
+        if (!_sup.NodeRunning) return;
+        var res = await Api.Get(_sup.Url, "/api/bili/diary?days=60");
+        if (!res.Ok)
+        {
+            diaryText.Text = "读取日记失败：" + (res.Error.Length > 0 ? res.Error : Api.Detail(res));
+            return;
+        }
+        diaryDays.Clear();
+        dayBox.Items.Clear();
+        var days = res.Prop("days");
+        if (days.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var d in days.EnumerateArray())
+            {
+                diaryDays.Add(d);
+                var date = Text(d, "date");
+                var watched = d.TryGetProperty("watched", out var w) && w.ValueKind == JsonValueKind.Array ? w.GetArrayLength() : 0;
+                dayBox.Items.Add(date + "（看了 " + watched + " 条）");
+            }
+        }
+        if (diaryDays.Count == 0)
+        {
+            diaryText.Text = "还没有日记。跑一轮之后这里就会出现「看了哪些视频 + 两本日记」。";
+            return;
+        }
+        dayBox.SelectedIndex = 0;
+    }
+
+    void RenderDay(int index)
+    {
+        if (index < 0 || index >= diaryDays.Count) return;
+        var d = diaryDays[index];
+        var date = Text(d, "date");
+        var parts = new List<string> { date };
+        var watched = d.TryGetProperty("watched", out var w) && w.ValueKind == JsonValueKind.Array ? w : default;
+        var shares = d.TryGetProperty("shares", out var sh) && sh.ValueKind == JsonValueKind.Number ? sh.GetInt64() : 0;
+        var lines = new List<string>();
+        if (watched.ValueKind == JsonValueKind.Array && watched.GetArrayLength() > 0)
+        {
+            var i = 0;
+            foreach (var row in watched.EnumerateArray())
+            {
+                i++;
+                var title = Text(row, "title");
+                var bvid = Text(row, "bvid");
+                var score = row.TryGetProperty("score", out var s) && s.ValueKind == JsonValueKind.Number ? s.GetInt64() : 0;
+                lines.Add(i + ". 《" + (title.Length > 0 ? title : bvid) + "》" + (score > 0 ? "（评分 " + score + "）" : "") + "\n   https://www.bilibili.com/video/" + bvid + "/");
+            }
+        }
+        else
+        {
+            lines.Add("（这天没有记录到看过的视频）");
+        }
+        var owner = Text(d, "owner");
+        var self = Text(d, "self");
+        var text = string.Join(" ｜ ", parts) + " ｜ 分享 " + shares + " 条\n\n【看过的视频】\n" + string.Join("\n", lines);
+        if (owner.Length > 0) text += "\n\n【写给主人】\n" + owner;
+        if (self.Length > 0) text += "\n\n【只给自己】\n" + self;
+        diaryText.Text = text;
+    }
+
+    static string Text(JsonElement obj, string name)
+        => obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+            ? (v.GetString() ?? "") : "";
+
     async Task LoadStyleAsync()
     {
         if (!_sup.NodeRunning) return;
@@ -439,6 +527,7 @@ public sealed class BiliPage : UserControl, IRefreshable
         detail.SetResourceReference(StyleProperty, "Small");
         statusText.Text = BuildStatus(res);
         if (!editorsLoaded) { FillEditors(res); editorsLoaded = true; }
+        await LoadDiaryAsync();
         await LoadStyleAsync();
     }
 
