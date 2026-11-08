@@ -37,7 +37,7 @@ function createBiliLogin(opts = {}) {
     const png = renderPng(out.url, { scale: 8, quiet: 4 });
     pending = { key: out.key, at: now() };
     statusCache = { at: 0, value: null };
-    return { url: out.url, expiresInSec: out.expiresInSec, pngBase64: png.toString('base64') };
+    return { url: out.url, expiresInSec: out.expiresInSec, png: png.toString('base64') };
   }
 
   async function pollOnce(config) {

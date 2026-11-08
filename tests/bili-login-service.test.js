@@ -33,7 +33,7 @@ test('start：生成二维码并返回 base64，pending 生效', async () => {
   const { inst, calls } = harness();
   const out = await inst.start({});
   assert.equal(out.url, 'https://passport.example/qr?k=1');
-  assert.equal(out.pngBase64, Buffer.from('PNGDATA').toString('base64'));
+  assert.equal(out.png, Buffer.from('PNGDATA').toString('base64'));
   assert.equal(calls.generated, 1);
   const st = await inst.status({});
   assert.ok(st.pending, 'status 要能看到正在等待扫码');
