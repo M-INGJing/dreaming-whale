@@ -192,8 +192,7 @@ function status(runtime) {
   };
 }
 
-function pendingList(runtime, limit = 50) {
-  const config = runtime.config;
+function pendingList(runtime, limit = 50) {  const config = runtime.config;
   const root = config.root || process.cwd();
   const index = indexer.ensure(config, root);
   const dir = stickers.stickerDir(config, root);
@@ -215,7 +214,33 @@ function pendingList(runtime, limit = 50) {
   return out.slice(0, Math.max(1, Math.min(200, Number(limit) || 50)));
 }
 
+/** 最近收进图库的（含已自动归类的），给界面展示「其实收进来了」。 */
+function recentList(runtime, limit = 20) {
+  const config = runtime.config;
+  const root = config.root || process.cwd();
+  const index = indexer.ensure(config, root);
+  const dir = stickers.stickerDir(config, root);
+  const out = [];
+  for (const [sha, row] of Object.entries(index.items)) {
+    if (!row) continue;
+    out.push({
+      sha,
+      file: row.file,
+      path: path.join(dir, row.file),
+      description: row.description || '',
+      category: row.category || '',
+      confidence: row.confidence || 0,
+      sender: (row.source && row.source.sender) || '',
+      chatType: (row.source && row.source.chatType) || '',
+      addedAt: row.addedAt || 0,
+      seen: row.seen || 1,
+    });
+  }
+  out.sort((a, b) => b.addedAt - a.addedAt);
+  return out.slice(0, Math.max(1, Math.min(100, Number(limit) || 20)));
+}
+
 module.exports = {
-  PENDING_DIR, QUEUE_REL, collectConfig, collect, status, pendingList,
+  PENDING_DIR, QUEUE_REL, collectConfig, collect, status, pendingList, recentList,
   readQueue, writeQueue, enqueue, chatIdHash, recentContext,
 };

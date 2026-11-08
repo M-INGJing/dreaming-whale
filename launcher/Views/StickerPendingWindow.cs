@@ -20,6 +20,8 @@ public sealed class StickerPendingWindow : Window
 {
     readonly RuntimeSupervisor _sup;
     readonly StackPanel list = new();
+    readonly StackPanel recentPanel = new();
+    readonly TextBlock recentHint = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 14, 0, 8) };
     readonly TextBlock hint = new() { TextWrapping = TextWrapping.Wrap };
     readonly List<ComboBox> boxes = new();
     List<string> categories = new();
@@ -53,7 +55,11 @@ public sealed class StickerPendingWindow : Window
         root.Children.Add(hint);
 
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        scroll.Content = list;
+        var content = new StackPanel();
+        content.Children.Add(list);
+        content.Children.Add(recentHint);
+        content.Children.Add(recentPanel);
+        scroll.Content = content;
         root.Children.Add(scroll);
 
         Loaded += async (_, _) => await LoadAsync();
@@ -62,6 +68,7 @@ public sealed class StickerPendingWindow : Window
     async Task LoadAsync()
     {
         list.Children.Clear();
+        recentPanel.Children.Clear();
         boxes.Clear();
         if (!_sup.NodeRunning) { hint.Text = "内核没在运行，先启动内核。"; return; }
         var res = await Api.Get(_sup.Url, "/api/stickers/collect/pending");
@@ -84,22 +91,38 @@ public sealed class StickerPendingWindow : Window
             }
         }
         var items = res.Prop("items");
-        if (items.ValueKind != JsonValueKind.Array || items.GetArrayLength() == 0)
+        var pendingCount = items.ValueKind == JsonValueKind.Array ? items.GetArrayLength() : 0;
+        if (pendingCount == 0)
         {
-            hint.Text = "还没有待定的表情包。别人发一个，这里就会出现。";
-            return;
+            hint.Text = "没有待定的表情包（拿不准的才会留在这里）。下面「最近收藏」是已经自动归类的。";
         }
-        hint.Text = "共 " + items.GetArrayLength() + " 张待定。选个分类点「归档」，或直接删掉。";
-        foreach (var item in items.EnumerateArray()) list.Children.Add(BuildRow(item));
+        else
+        {
+            hint.Text = "共 " + pendingCount + " 张待定。选个分类点「归档」，或直接删掉。";
+            foreach (var item in items.EnumerateArray()) list.Children.Add(BuildRow(item, false));
+        }
+
+        var recent = res.Prop("recent");
+        if (recent.ValueKind == JsonValueKind.Array && recent.GetArrayLength() > 0)
+        {
+            recentHint.Text = "最近收藏（已自动归类，也可以在这里改分类或删除）";
+            recentHint.SetResourceReference(StyleProperty, "H2");
+            foreach (var item in recent.EnumerateArray()) recentPanel.Children.Add(BuildRow(item, true));
+        }
+        else
+        {
+            recentHint.Text = "";
+        }
     }
 
-    FrameworkElement BuildRow(JsonElement item)
+    FrameworkElement BuildRow(JsonElement item, bool showCategory)
     {
         var sha = Str(item, "sha");
         var file = Str(item, "path");
         var desc = Str(item, "description");
         var sender = Str(item, "sender");
         var chatType = Str(item, "chatType");
+        var category = Str(item, "category");
 
         var card = new Border { Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 0, 0, 10) };
         card.SetResourceReference(StyleProperty, "Card");
@@ -126,7 +149,9 @@ public sealed class StickerPendingWindow : Window
 
         var text = new TextBlock
         {
-            Text = (desc.Length > 0 ? desc : "（还没描述）") + "\n" + (chatType == "group" ? "群聊" : "私聊") + (sender.Length > 0 ? " · " + sender : ""),
+            Text = (showCategory && category.Length > 0 ? "【" + category + "】" : "")
+                + (desc.Length > 0 ? desc : "（还没描述）") + "\n"
+                + (chatType == "group" ? "群聊" : "私聊") + (sender.Length > 0 ? " · " + sender : ""),
             TextWrapping = TextWrapping.Wrap,
         };
         text.SetResourceReference(StyleProperty, "Small");
@@ -166,6 +191,7 @@ public sealed class StickerPendingWindow : Window
             return;
         }
         list.Children.Remove(row);
+        recentPanel.Children.Remove(row);
         hint.Text = delete ? "已删除。" : "已归档到「" + category.Trim() + "」。";
     }
 

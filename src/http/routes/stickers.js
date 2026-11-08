@@ -269,6 +269,7 @@ module.exports = function register(router) {
       return json(res, 200, {
         ok: true,
         items: stickerCollect.pendingList(runtime, 50),
+        recent: stickerCollect.recentList(runtime, 20),
         categories: stickers.promptCategories(config, config.root),
       });
     }
