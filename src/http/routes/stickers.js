@@ -17,8 +17,12 @@ const { spawn } = require('node:child_process');
 const stickers = require('../../adapters/stickers');
 const { json, readBody, MIME } = require('../protocol');
 const { isLoopbackRequest } = require('../security');
+const indexer = require('../../infra/stickerIndex');
+const stickerCollect = require('../../services/stickerCollect');
+const stickerClassify = require('../../services/stickerClassify');
 
-const BRIDGE_ONLY = new Set(['/api/stickers/gate', '/api/stickers/pending', '/api/stickers/claim', '/api/stickers/ack']);
+// 收藏：桥接提交必须带 gateway token（同机其它程序不能往里灌图）
+const BRIDGE_ONLY = new Set(['/api/stickers/gate', '/api/stickers/pending', '/api/stickers/claim', '/api/stickers/ack', '/api/stickers/collect']);
 
 function stickerPath(config, emotion, name) {
   const dir = stickers.stickerDir(config, config.root);
@@ -245,6 +249,79 @@ module.exports = function register(router) {
       return (async () => {
         const body = await readBody(req);
         return json(res, 200, { ok: true, item: service.ack(body && body.id, body && body.status, body && body.error) });
+      })();
+    }
+
+    // ---- 收藏：别人发的表情包（去重落盘 → 待定 → 异步归类）----
+    if (pathname === '/api/stickers/collect' && method === 'POST') {
+      return (async () => {
+        const body = await readBody(req, 12 * 1024 * 1024);
+        const out = stickerCollect.collect(runtime, body || {});
+        return json(res, out.ok ? 200 : 400, out);
+      })();
+    }
+
+    if (pathname === '/api/stickers/collect/status' && method === 'GET') {
+      return json(res, 200, { ok: true, ...stickerCollect.status(runtime) });
+    }
+
+    if (pathname === '/api/stickers/collect/pending' && method === 'GET') {
+      return json(res, 200, {
+        ok: true,
+        items: stickerCollect.pendingList(runtime, 50),
+        categories: stickers.promptCategories(config, config.root),
+      });
+    }
+
+    if (pathname === '/api/stickers/collect/image' && method === 'GET') {
+      const url = new URL(req.url, 'http://localhost');
+      const sha = String(url.searchParams.get('sha') || '');
+      const idx = indexer.ensure(config, config.root);
+      const row = idx.items[sha];
+      if (!row || !row.file) return json(res, 404, { ok: false, error: '找不到这张候选' });
+      const dir = stickers.stickerDir(config, config.root);
+      const file = path.resolve(dir, row.file);
+      if (!file.startsWith(path.resolve(dir) + path.sep)) return json(res, 400, { ok: false, error: '非法路径' });
+      const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+      const stream = fs.createReadStream(file);
+      stream.on('error', () => { if (!res.destroyed) res.destroy(); });
+      return stream.pipe(res);
+    }
+
+    if (pathname === '/api/stickers/collect/resolve' && method === 'POST') {
+      return (async () => {
+        const body = await readBody(req);
+        const sha = String((body && body.sha) || '');
+        const idx = indexer.ensure(config, config.root);
+        const item = idx.items[sha];
+        if (!item) return json(res, 404, { ok: false, error: '找不到这张候选' });
+        const dir = stickers.stickerDir(config, config.root);
+        if ((body && body.action) === 'delete') {
+          try { fs.unlinkSync(path.resolve(dir, item.file)); } catch { /* 文件可能已被删 */ }
+          delete idx.items[sha];
+          idx.pending = (idx.pending || []).filter((x) => x !== sha);
+          indexer.save(config, config.root, idx);
+          return json(res, 200, { ok: true, deleted: true });
+        }
+        const label = stickers.cleanCategoryLabel(body && body.category);
+        if (!label) return json(res, 400, { ok: false, error: '缺少分类' });
+        let key = stickers.resolveCategory(config, label);
+        if (!key) {
+          const extras = stickers.readExtraCategories(config, config.root);
+          if (!extras.some((c) => c.label === label)) {
+            stickers.writeExtraCategories(config, config.root, [...extras, { label, chance: 0.25 }]);
+          }
+          key = stickers.extraKey(label);
+        }
+        if (!key) return json(res, 400, { ok: false, error: '分类不可用' });
+        const moved = stickerClassify.moveToCategory(config, config.root, item, key, label, {
+          confidence: 1, tags: item.tags || [], description: item.description,
+        });
+        if (!moved) return json(res, 500, { ok: false, error: '移动文件失败' });
+        idx.pending = (idx.pending || []).filter((x) => x !== sha);
+        indexer.save(config, config.root, idx);
+        return json(res, 200, { ok: true, category: label, file: item.file });
       })();
     }
 

@@ -205,6 +205,20 @@ const DEFAULT_CONFIG = {
     testChat: '文件传输助手', // 控制台「发送测试表情包」默认发到哪
     demandChance: 0.7,
     ensureSend: false,
+    // 收藏别人发的表情包：去重后落盘「待定」，再异步按画面+语境分类。
+    collect: {
+      enabled: true,
+      fromGroups: true,
+      fromPrivate: true,
+      skipFromMaster: false,   // 主人发也收（用户选择）
+      maxPerDay: 30,
+      maxFileBytes: 2 * 1024 * 1024,
+      dhashDistance: 6,
+      sameFormatOnly: true,
+      minConfidence: 0.6,
+      pendingTtlDays: 0,       // 0 = 待定永不自动删
+      allowNewCategories: true,
+    },
   },
   // B 站养鱼（只读）：总闸是 features.bili，这里是作息/偏好/预算/日记的默认值。
   // 默认全部按「刚创的小号也扛得住」给保守值；关掉开关就不拉 feed、不写日记、不分享。

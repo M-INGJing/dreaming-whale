@@ -637,6 +637,19 @@ namespace WhaleLauncher.Views
             await ShowStickerFolder("");
         }
 
+        private void OnCollectPending(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var win = new StickerPendingWindow(_sup) { Owner = Window.GetWindow(this) };
+                win.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "打开收藏待定失败：" + ex.Message;
+            }
+        }
+
         private async void OnOpenCategoryFolder(object sender, RoutedEventArgs e)
         {
             // 页签行：当前分类自己的文件夹

@@ -77,6 +77,16 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 收藏别人发的表情包（去重 + 自动分类）
+
+- 只收表情包消息（微信 emoji），私聊/群聊都收（含主人自己发的），落盘 `data/stickers/待定/<sha12>.<ext>`。
+- 去重两层：sha256 完全相同 + 64 位 dHash 近似（汉明距离 ≤6，格式不同不算重复）；命中只 `seen++`，不重复存。
+- 分类：视觉描述（复用 `/api/vision`）+ 会话最近 5 条文本 + 图库现有例子 → 一次 LLM 输出分类/置信度/标签；置信度 <0.6 留待定；允许模型提议新分类（自动登记）。
+- 异步：桥接后台线程提交（不阻塞收消息），内核 5 秒轮询队列分类，队列落盘可续跑。
+- 启动器「表情包」页新增「收藏待定」按钮：缩略图 + 描述 + 分类下拉，可归档或删除。
+- 接口：`POST /api/stickers/collect`、`GET /api/stickers/collect/{status,pending,image}`、`POST /api/stickers/collect/resolve`。
+- 测试：`tests/sticker-collect.test.js`(10)、`tests/test_sticker_collect.py`(6)。
+
 ### 修复 · 日记界面用 BV 号代替标题
 
 - feed 日志从本轮开始才记标题，老记录只有 BV 号；新增 `data/bili/titles.json` 标题缓存，调度器每轮写入，`diaryView` 在 feed 缺标题时回退到缓存。

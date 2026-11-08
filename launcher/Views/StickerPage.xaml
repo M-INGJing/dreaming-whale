@@ -14,7 +14,9 @@
         <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,12">
             <TextBlock DockPanel.Dock="Left" Text="表情包" Style="{StaticResource H1}" VerticalAlignment="Center" />
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="打开总目录" Style="{StaticResource Ghost}" Click="OnOpenFolder"
+                <Button Content="收藏待定" Style="{StaticResource Ghost}" Click="OnCollectPending"
+                        ToolTip="别人发的表情包会自动收进「待定」，在这里归类" />
+                <Button Content="打开总目录" Style="{StaticResource Ghost}" Click="OnOpenFolder" Margin="8,0,0,0"
                         ToolTip="打开表情包库根目录（data\stickers）" />
                 <Button Content="⟳ 刷新" Style="{StaticResource Ghost}" Margin="8,0,0,0" Click="OnReload" />
             </StackPanel>

@@ -155,6 +155,11 @@ class ReceiverMixin:
                 G.log('表情包读取失败：本地缓存不可解码，且消息没有可取得的原图')
                 return ''
             raw, frames = preview
+            try:
+                from sticker_collect import collect_async
+                collect_async(self, msg, raw, log=G.log)
+            except Exception:  # noqa: BLE001 - 收藏失败绝不影响识别/回话
+                pass
             prompt = '这是对方发来的表情包。简短描述主体、表情、动作和画面文字，看不清就说明，不要编造。'
             if frames > 1:
                 prompt += '从左到右是同一动画的%d个抽样帧，结合它们理解，不要当成不同图片；未展示的动作不要猜。' % frames

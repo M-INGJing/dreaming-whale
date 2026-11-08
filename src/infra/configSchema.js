@@ -59,6 +59,17 @@ const FIELDS = {
   'sticker.demandChance': { type: 'float', min: 0, max: 1 },
   // 命中提醒的轮次，模型没写标记也由程序补一张（1.0 + 开启才约等于每轮都发）。
   'sticker.ensureSend': { type: 'bool' },
+  'sticker.collect.enabled': { type: 'bool' },
+  'sticker.collect.fromGroups': { type: 'bool' },
+  'sticker.collect.fromPrivate': { type: 'bool' },
+  'sticker.collect.skipFromMaster': { type: 'bool' },
+  'sticker.collect.maxPerDay': { type: 'int', min: 0, max: 500 },
+  'sticker.collect.maxFileBytes': { type: 'int', min: 1024, max: 8 * 1024 * 1024 },
+  'sticker.collect.dhashDistance': { type: 'int', min: 0, max: 64 },
+  'sticker.collect.sameFormatOnly': { type: 'bool' },
+  'sticker.collect.minConfidence': { type: 'float', min: 0, max: 1 },
+  'sticker.collect.pendingTtlDays': { type: 'int', min: 0, max: 365 },
+  'sticker.collect.allowNewCategories': { type: 'bool' },
 
   // ---- B 站养鱼（只读）----
   'bili.cookie': { type: 'string', maxLen: 4000 },

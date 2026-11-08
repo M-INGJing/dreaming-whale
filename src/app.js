@@ -193,6 +193,14 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
   } catch (err) {
     logger.warn('B 站作息启动失败（不影响聊天）：' + describeError(err));
   }
+  // 表情包收藏：异步分类 worker（每 5 秒看一眼队列；开关关闭时不做事）
+  try {
+    const stickerClassify = require('./services/stickerClassify');
+    runtime.stickerClassify = stickerClassify;
+    stickerClassify.start(runtime);
+  } catch (err) {
+    logger.warn('表情包收藏 worker 启动失败（不影响聊天）：' + describeError(err));
+  }
   watchConfigFile(runtime);
   // 探针：createRuntime 结束 = server.js 可以 listen 的时刻，这条就是「启动被堵了多久」
   probe.emit(logger, 'info', `createRuntime 耗时=${probe.ms(probe.now() - probeT0)}ms（listen 之前）`);
