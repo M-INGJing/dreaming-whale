@@ -1,0 +1,138 @@
+'use strict';
+
+/**
+ * B 站养鱼的本机存储（data/bili/，已被 .gitignore 排除）。
+ *
+ * 原则：
+ *  - 全部是普通文件，原子写（.tmp→rename），断电不产生半个 JSON；
+ *  - 日记按天追加，同一天第二次醒只续写当天那一节；
+ *  - 事件流只记结构信息（kind/bvid/计数），不写视频正文与 cookie。
+ */
+
+const fs = require('node:fs');
+const path = require('node:path');
+const diaryFormat = require('../core/bili/diaryFormat');
+
+const REL = 'data/bili';
+
+function rootOf(config) {
+  if (config && config.paths && config.paths.dataDir) return path.resolve(config.paths.dataDir, '..');
+  return process.cwd();
+}
+
+function paths(config) {
+  const root = rootOf(config);
+  const dir = path.join(root, REL);
+  return {
+    root,
+    dir,
+    state: path.join(dir, 'state.json'),
+    quota: path.join(dir, 'quota.json'),
+    events: path.join(dir, 'events.jsonl'),
+    diaryOwner: path.join(dir, 'diary', 'owner.md'),
+    diarySelf: path.join(dir, 'diary', 'self.md'),
+    feedDir: path.join(dir, 'feed'),
+  };
+}
+
+function ensureDir(file) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+}
+
+function readJson(file, fallback) {
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    const value = JSON.parse(raw);
+    return value && typeof value === 'object' ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(file, data) {
+  ensureDir(file);
+  const tmp = file + '.tmp';
+  const payload = JSON.stringify(data, null, 2);
+  fs.writeFileSync(tmp, payload, 'utf8');
+  fs.renameSync(tmp, file);
+  return data;
+}
+
+function readText(file) {
+  try { return fs.readFileSync(file, 'utf8'); } catch { return ''; }
+}
+
+function appendEvent(config, event) {
+  const p = paths(config);
+  ensureDir(p.events);
+  const row = { at: new Date().toISOString(), ...(event && typeof event === 'object' ? event : { kind: 'event' }) };
+  try {
+    fs.appendFileSync(p.events, JSON.stringify(row) + '\n', 'utf8');
+    return row;
+  } catch {
+    return null;
+  }
+}
+
+function appendFeedLog(config, date, rows) {
+  const p = paths(config);
+  fs.mkdirSync(p.feedDir, { recursive: true });
+  const file = path.join(p.feedDir, diaryFormat.today(date) + '.jsonl');
+  try {
+    fs.appendFileSync(file, rows.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
+    return file;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 写一天的一节：当天已有内容就续写，否则新开一节。
+ * @param {'owner'|'self'} kind
+ */
+function appendDiary(config, kind, date, body) {
+  const p = paths(config);
+  const file = kind === 'self' ? p.diarySelf : p.diaryOwner;
+  ensureDir(file);
+  const text = String(body == null ? '' : body).trim();
+  if (!text) return '';
+  const existing = readText(file);
+  const key = diaryFormat.today(date);
+  const existingToday = diaryFormat.digestOf(existing, date, 100000);
+  let next;
+  if (existingToday) {
+    // 同一天再醒：续写在文件末尾（当天那节一定在最后，因为只按时间顺序追加）
+    next = existing.endsWith('\n') ? existing : existing + '\n';
+    next += '\n' + text + '\n';
+  } else {
+    next = existing ? existing.replace(/\s*$/, '\n\n') : '';
+    next += diaryFormat.section(date, text);
+  }
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, next, 'utf8');
+  fs.renameSync(tmp, file);
+  return file;
+}
+
+/** 状态页用：只回计数与最近标题，不回日记正文。 */
+function diarySummary(config, date) {
+  const p = paths(config);
+  const owner = readText(p.diaryOwner);
+  const self = readText(p.diarySelf);
+  return {
+    ownerDays: diaryFormat.countDays(owner),
+    selfDays: diaryFormat.countDays(self),
+    todayOwnerChars: diaryFormat.digestOf(owner, date, 100000).length,
+    todaySelfChars: diaryFormat.digestOf(self, date, 100000).length,
+  };
+}
+
+function readDiaries(config) {
+  const p = paths(config);
+  return { owner: readText(p.diaryOwner), self: readText(p.diarySelf) };
+}
+
+module.exports = {
+  REL, paths, rootOf, readJson, writeJson, readText, appendEvent, appendFeedLog,
+  appendDiary, diarySummary, readDiaries,
+};

@@ -184,6 +184,15 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
     logger.warn('记忆启动恢复失败（不影响聊天）：' + describeError(err));
   }
   runtime.gateways = createGateways({ config, bot: runtime.bot, logger: child('gateway') });
+  // B 站养鱼：作息调度（每分钟看一眼，开关与窗口都在 config.bili，默认关）。
+  // 失败不影响聊天：调度的异常只记日志，不抛到启动流程。
+  try {
+    const { createBiliScheduler } = require('./services/bili/scheduler');
+    runtime.biliScheduler = createBiliScheduler({ runtime, logger: child('bili') });
+    runtime.biliScheduler.start();
+  } catch (err) {
+    logger.warn('B 站作息启动失败（不影响聊天）：' + describeError(err));
+  }
   watchConfigFile(runtime);
   // 探针：createRuntime 结束 = server.js 可以 listen 的时刻，这条就是「启动被堵了多久」
   probe.emit(logger, 'info', `createRuntime 耗时=${probe.ms(probe.now() - probeT0)}ms（listen 之前）`);

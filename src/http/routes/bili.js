@@ -9,7 +9,10 @@
 
 const features = require('../../infra/features');
 const { createBiliLogin } = require('../../services/biliLogin');
-const { json } = require('../util');
+const { createBiliScheduler } = require('../../services/bili/scheduler');
+const biliStore = require('../../infra/biliStore');
+const clock = require('../../core/bili/clock');
+const { json, readBody } = require('../util');
 
 const INSTANCES = new WeakMap();
 
@@ -22,19 +25,53 @@ function forRuntime(runtime) {
   return inst;
 }
 
+function schedulerFor(runtime) {
+  if (runtime.biliScheduler) return runtime.biliScheduler;
+  const inst = createBiliScheduler({ runtime, logger: runtime.logger });
+  runtime.biliScheduler = inst;
+  return inst;
+}
+
 module.exports = function register(router) {
   router.get('/api/bili/status', async (runtime, req, res) => {
     try {
       const out = await forRuntime(runtime).status(runtime.config);
+      const now = new Date();
+      const state = schedulerFor(runtime).loadState(now);
+      const q = schedulerFor(runtime).loadQuota(now);
+      const night = (runtime.config.bili && runtime.config.bili.night) || {};
       return json(res, 200, {
         ok: true,
         enabled: features.isOn(runtime.config, 'bili'),
         ...out,
+        today: { date: state.date, wakes: state.wakes, skipped: state.skipped },
+        quota: { readHour: q.readHour, readDay: q.readDay, writeDay: q.writeDay },
+        windows: clock.normalizeWindows(night.windows),
+        nextWakeMinutes: clock.nextWindowIn(night.windows, now),
+        diary: biliStore.diarySummary(runtime.config, now),
       });
     } catch (err) {
       runtime.logger.warn('[bili] status 失败 code=' + (err && err.code ? err.code : 'unknown'));
       return json(res, 500, { ok: false, error: '读取 B 站状态失败' });
     }
+  });
+
+  // 手动跑一轮：{ dry: true } 只回候选与打分，不读视频、不写日记、不记账。
+  router.post('/api/bili/run', async (runtime, req, res) => {
+    try {
+      const body = await readBody(req).catch(() => ({}));
+      const out = await schedulerFor(runtime).runRound({ dry: Boolean(body && body.dry) });
+      return json(res, 200, { ok: Boolean(out.ok), ...out });
+    } catch (err) {
+      runtime.logger.warn('[bili] 手动运行失败 code=' + (err && err.code ? err.code : 'unknown'));
+      return json(res, 500, { ok: false, error: '运行失败（网络或配置异常）' });
+    }
+  });
+
+  // 日记只回计数与今天的字数，不回正文（正文只在启动器外的人工查看 / 后续聊天注入里用）。
+  router.get('/api/bili/diary', (runtime, req, res) => {
+    const now = new Date();
+    return json(res, 200, { ok: true, summary: biliStore.diarySummary(runtime.config, now) });
   });
 
   router.post('/api/bili/login/qr', async (runtime, req, res) => {

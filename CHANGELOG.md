@@ -77,6 +77,15 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · B 站作息与两本日记（P1）
+
+- `src/core/bili/{clock,score,quota,diaryFormat}.js`：作息窗口（含跨午夜）、开摆概率、偏好打分（喜欢/踩雷/热度/新鲜/看过/超时长）、读写预算、日记按天分节与当天摘要。
+- `src/services/bili/{feed,diary,scheduler}.js`：拉推荐流（失败退热门）、按预算与窗口跑一轮（读 2 条视频资料）、写两本日记（有模型按人设写 JSON，无模型用模板）。
+- `config.bili` 默认值（窗口 20:00–24:00、开摆 30%、每天醒 1 次、读 120/时 400/天）与 `configSchema` 校验；`features.bili` 关掉时整轮不产生任何请求。
+- 内核新增 `POST /api/bili/run`（dry 只回候选与打分）与 `GET /api/bili/diary`（只回计数）；`/api/bili/status` 追加今日醒次数、配额、窗口与下次唤醒分钟。
+- 内核启动时挂上调度器（每分钟检查一次；异常只记日志，不影响聊天）。
+- 新增 `tests/bili-p1.test.js`(16)：窗口/跨午夜/开摆/偏好打分/配额/日记分节/feed 归一/写日记模板/调度 dry-run 与真实一轮/开关关闭零请求。
+
 ### 修复 · B 站二维码图片不显示
 
 - 扫码登录返回了有效图片（456×456、37.8% 深色模块），但页面只把外层容器设为可见，图片控件自身仍是 `Collapsed`，表现是「一直等待扫码、区域空白」；现在同时打开图片自身可见性，并补了加载后的尺寸日志。

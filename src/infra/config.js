@@ -206,6 +206,25 @@ const DEFAULT_CONFIG = {
     demandChance: 0.7,
     ensureSend: false,
   },
+  // B 站养鱼（只读）：总闸是 features.bili，这里是作息/偏好/预算/日记的默认值。
+  // 默认全部按「刚创的小号也扛得住」给保守值；关掉开关就不拉 feed、不写日记、不分享。
+  bili: {
+    preferences: {
+      like: ['AI 工具与插件', '猫咪', '鬼畜与怀旧剪辑', '动画/模型'],
+      dislike: ['带货', '擦边', '标题党', '纯搬运'],
+    },
+    night: {
+      windows: [{ start: '20:00', end: '24:00', wakes: 1 }],
+      skipChance: 0.3,
+      maxVideos: 5,
+      maxWakesPerDay: 1,
+      maxMinutes: 45,
+    },
+    share: { enabled: true, minScore: 13, daily: 3, minGapMinutes: 120, silentAfterDays: 3, chats: [] },
+    risk: { minGapMs: 1500, readHourly: 120, readDaily: 400, writeHourly: 0, writeDaily: 0, writeGapSec: 120 },
+    diary: { enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 200 },
+    write: { enabled: false },
+  },
   // 图片理解：默认智谱 GLM-4V-Flash（免费）
   features: {
     stickers: false,

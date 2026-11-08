@@ -60,6 +60,26 @@ const FIELDS = {
   // 命中提醒的轮次，模型没写标记也由程序补一张（1.0 + 开启才约等于每轮都发）。
   'sticker.ensureSend': { type: 'bool' },
 
+  // ---- B 站养鱼（只读）----
+  'bili.night.skipChance': { type: 'float', min: 0, max: 1 },
+  'bili.night.maxVideos': { type: 'int', min: 1, max: 20 },
+  'bili.night.maxWakesPerDay': { type: 'int', min: 1, max: 10 },
+  'bili.night.maxMinutes': { type: 'int', min: 1, max: 240 },
+  'bili.share.enabled': { type: 'bool' },
+  'bili.share.minScore': { type: 'float', min: -20, max: 40 },
+  'bili.share.daily': { type: 'int', min: 0, max: 20 },
+  'bili.share.minGapMinutes': { type: 'int', min: 0, max: 1440 },
+  'bili.share.silentAfterDays': { type: 'int', min: 0, max: 60 },
+  'bili.risk.minGapMs': { type: 'int', min: 0, max: 10000 },
+  'bili.risk.readHourly': { type: 'int', min: 0, max: 5000 },
+  'bili.risk.readDaily': { type: 'int', min: 0, max: 50000 },
+  'bili.risk.writeHourly': { type: 'int', min: 0, max: 500 },
+  'bili.risk.writeDaily': { type: 'int', min: 0, max: 5000 },
+  'bili.risk.writeGapSec': { type: 'int', min: 0, max: 3600 },
+  'bili.diary.enabled': { type: 'bool' },
+  'bili.diary.digestTokens': { type: 'int', min: 50, max: 2000 },
+  'bili.write.enabled': { type: 'bool' },
+
   // ---- 记忆（旧键，运行时只读 constants.js）----
   // 唯一生效的可调项：对话预算（不含 system prompt）。没有上限：
   // 启动器里可以用输入框手填任意值，但 system + 它超过 hardTotalTokens（64,000）时会被拒绝，
