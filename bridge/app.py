@@ -243,7 +243,6 @@ class BridgeRuntime(AccountMixin, WindowMixin, SenderMixin, StickerMixin, VoiceM
         G.threading.Thread(target=self.listener_watch, daemon=True).start()
         G.threading.Thread(target=self.contacts_sync_once, daemon=True).start()
         G.REMINDER_RUNNER = self.start_reminder_watch()
-        G.log('朋友圈读取通道未启动 type=%s' % type(exc).__name__)
         G.log('已启动。鲸鲸地址：', self.bot_url)
         try:
             import json as _json, datetime as _dt

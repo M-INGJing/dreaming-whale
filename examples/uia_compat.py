@@ -582,10 +582,17 @@ def apply(verbose: bool = True) -> bool:
                 log.warning("uia_compat: 点会话行异常：%s", e)
             time.sleep(0.8)
             cur = None
-            try:
-                cur = self.current_chat()
-            except Exception:                    # noqa: BLE001
-                cur = None
+            # 微信 4.2 点完会话行后会短暂把 current_chat 读成 None，旧代码一次读不到
+            # 就退到搜索框兜底：搜索要 10 秒、还把界面留在半开状态，越点越读不到。
+            # 这里先多读几次，真读到了别的会话才回退。
+            for _ in range(6):
+                try:
+                    cur = self.current_chat()
+                except Exception:                # noqa: BLE001
+                    cur = None
+                if cur:
+                    break
+                time.sleep(0.25)
             if cur and (cur == nm or _row_score(cur, [nm]) == 0):
                 log.info("uia_compat: 会话已打开（current_chat=%r）", cur)
                 return True

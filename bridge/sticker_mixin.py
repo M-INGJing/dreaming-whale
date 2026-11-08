@@ -22,7 +22,11 @@ class StickerMixin:
                     pass
                 if isinstance(value, str) and (not G.sticker_input_is_blank(value)):
                     entry['draft_observed'] = True
-                if G.sticker_input_is_blank(value) and entry['draft_observed']:
+                if G.sticker_input_is_blank(value):
+                    # 读到「空」本身就是草稿已清的证据。以前还要求「先观察到非空
+                    # 草稿，之后读到空」，但微信 4.2 粘贴后可能一直读成空串，
+                    # 隔离锁于是永远解不开，之后每条都被 must be cleared 挡住
+                    # （只能重启桥接）。读不到值（None / 目标不符）仍然锁着。
                     self.sticker_draft_quarantine.pop(key, None)
                 else:
                     return False
@@ -105,7 +109,24 @@ class StickerMixin:
                     if not self.sticker_gate(generation, job_id):
                         return G.sticker_result('cancelled', 'stickers are disabled or generation expired')
                     try:
-                        canonical, aliases = G.resolve_sticker_target(self.db, chat_display_name, chat_username)
+                        try:
+                            canonical, aliases = G.resolve_sticker_target(self.db, chat_display_name, chat_username)
+                        except Exception as exc:
+                            # 以前这里和「窗口没切过去」共用同一句 target is not open，
+                            # 看日志分不清是会话解析失败还是 UIA 没切成功。
+                            G.log('[sticker] 目标会话解析失败：%s: %s' % (type(exc).__name__, exc))
+                            return G.sticker_result('failed', 'target account or session could not be resolved; nothing was sent')
+                        # 群聊在 contact.db 里常常没有名字，微信会话列表显示的是
+                        # 「成员甲、成员乙」。文字发送用的就是 aliases_for 这套候选名，
+                        # 这里并进来；否则窗口标题永远对不上（现场日志：
+                        # [sticker] 目标会话没打开：当前='shicm、Zzz.' 期望=['…@chatroom']）。
+                        try:
+                            extra = self.aliases_for(chat_username, chat_display_name) or []
+                        except Exception:
+                            extra = []
+                        merged = {str(a).strip() for a in list(aliases) + list(extra) if str(a or '').strip()}
+                        if merged:
+                            aliases = frozenset(merged)
                         if not self.sticker_quarantine_allows(canonical, chat_display_name, gui_locked=True):
                             return G.sticker_result('failed', 'an uncertain attachment draft must be cleared manually before further sends')
                         if not self.sticker_activity_allowed(canonical):
@@ -118,16 +139,34 @@ class StickerMixin:
                         if uia is None:
                             return G.sticker_result('failed', 'UIA target proof is unavailable; no OCR fallback')
                         search_keys = [chat_display_name] + [a for a in aliases if a and a != chat_display_name]
-                        try:
-                            if not G.sticker_alias_match(uia.current_chat(), aliases):
+                        # 读不到标题（None）时只等 UI 刷新，绝不去点会话行：微信 4.2 上
+                        # 点一下 current_chat 会短时读成 None，再走搜索框兜底会把界面留在
+                        # 坏状态，越点越读不到（现场：00:17:54 起连续 10 秒 None）。
+                        title = None
+                        for _ in range(12):
+                            try:
+                                title = uia.current_chat()
+                            except Exception:
+                                title = None
+                            if title:
+                                break
+                            G.time.sleep(0.25)
+                        if not G.sticker_alias_match(title, aliases) and title:
+                            try:
                                 uia.open_chat(search_keys)
-                                for _ in range(8):
-                                    G.time.sleep(0.25)
-                                    if G.sticker_alias_match(uia.current_chat(), aliases):
-                                        break
-                        except Exception:
-                            return G.sticker_result('failed', 'exact target is not open in the pinned window')
-                        if not G.sticker_alias_match(uia.current_chat(), aliases):
+                            except Exception as exc:
+                                G.log('[sticker] 切换目标会话失败：%s: %s' % (type(exc).__name__, exc))
+                            for _ in range(8):
+                                try:
+                                    title = uia.current_chat()
+                                except Exception:
+                                    title = None
+                                if G.sticker_alias_match(title, aliases):
+                                    break
+                                G.time.sleep(0.25)
+                        if not G.sticker_alias_match(title, aliases):
+                            G.log('[sticker] 目标会话没打开：当前=%r 期望=%r 显示名=%r'
+                                  % (title, sorted(aliases), chat_display_name))
                             return G.sticker_result('failed', 'exact target is not open in the pinned window')
                         current = self.sticker_config_now()
                         if current is None:

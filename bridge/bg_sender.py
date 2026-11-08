@@ -1073,7 +1073,7 @@ def open_chat(sender, aliases, timeout=6.0, log=None):
 
     info = read_ui(sender.hwnd)
     cur = info["chat"]
-    if cur and any(name_score(a, cur) == 0 for a in aliases):
+    if _chat_is_target(cur, aliases)[0]:
         return True
     if not info["rows"]:
         return False
@@ -1109,7 +1109,7 @@ def open_chat(sender, aliases, timeout=6.0, log=None):
         time.sleep(TIMING["pollSwitch"])
         info = read_ui(sender.hwnd)
         cur = info["chat"]
-        if cur and name_score(nm, cur) == 0:
+        if _chat_is_target(cur, [nm])[0]:
             log("后台通道：已切到会话 %r" % (nm,))
             return True
         # 点完之后控件树可能被微信重建（实测会从 150 掉到 81、输入框暂时消失），

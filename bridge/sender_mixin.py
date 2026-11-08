@@ -101,7 +101,24 @@ class SenderMixin:
                 cur = u.current_chat()
             except Exception:
                 pass
-            hit_cur = cur == who or any((cur == k for k in keys if k))
+            # 微信 4.2 在发送/切换会话之后会短暂把标题读成空。旧代码只看一次就当
+            # 「不在目标会话」，于是又去点会话行；点一下之后标题更久读不到，还会
+            # 退到搜索框兜底（现场：10 秒卡在 open_chat）。先等它自己刷新。
+            for _ in range(5):
+                if cur:
+                    break
+                G.time.sleep(0.2)
+                try:
+                    cur = u.current_chat()
+                except Exception:
+                    cur = None
+            # 判定和文字发送的 [核对] 一样：完全相同，或「成员甲、成员乙」集合吻合。
+            hit_cur = False
+            if cur:
+                try:
+                    hit_cur = G._chat_identity_level(cur, keys) is not None or cur == who
+                except Exception:
+                    hit_cur = cur == who or any((cur == k for k in keys if k))
             if not hit_cur and username:
                 hit_cur = bool(cur) and self.open_cache.get(username) == cur
             if not hit_cur:
@@ -298,7 +315,12 @@ class SenderMixin:
                         cands.add(cached)
             except Exception:
                 pass
-            return (cur in cands, cur)
+            # 和 [核对] 同一套判定：未命名群的标题是成员名拼起来的，DB 顺序可能不同，
+            # 只按字符串相等会把这句判成「发到了别的会话」。
+            try:
+                return (G._chat_identity_level(cur, cands) is not None, cur)
+            except Exception:
+                return (cur in cands, cur)
         t_start = G.time.time()
         saved_clip = get_clip()
         try:

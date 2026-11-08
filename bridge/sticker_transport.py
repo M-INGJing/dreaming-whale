@@ -189,9 +189,21 @@ def resolve_target(db, shown, username=''):
         row = next(row for row in exact if row.get('username') == canonical)
         aliases = {canonical, str(row.get('nick_name') or '').strip(), str(row.get('remark') or '').strip()}
         aliases.discard('')
+    # 群聊的 contact 行常常只有 username，nick_name / remark 都是空的：这时只按
+    # username 比窗口标题永远对不上，表情包会被判成 target_not_verified
+    # （日志：exact target is not open in the pinned window）。把调用方拿到的
+    # 显示名也当候选别名，下面统一的冲突检查会把有歧义的那个丢掉。
+    title = str(shown or '').strip()
+    if title:
+        aliases.add(title)
     safe = set()
     for alias in aliases:
-        others = _contacts(db, alias)
+        try:
+            others = _contacts(db, alias)
+        except ValueError:
+            # 搜索结果被截断（>=50 条）→ 这个别名无法证明唯一，按有歧义丢弃，
+            # 但不该因此连其它别名一起作废。
+            continue
         matched = {str(row.get('username') or '').strip() for row in others
                    if alias in {candidate for k in ('username', 'nick_name', 'remark')
                                 for candidate in (str(row.get(k) or '').strip(), _input_title(row.get(k)))}}
@@ -336,11 +348,34 @@ class WindowsDesktop:
             win32clipboard.CloseClipboard()
 
 
+_MEMBER_SPLIT_RE = re.compile('[、，,;；]+')
+
+
+def _member_set(title):
+    """「成员甲、成员乙」这种未命名群的标题 → 成员名集合（不是集合时不返回）。"""
+    parts = [p.strip() for p in _MEMBER_SPLIT_RE.split(str(title or ''))]
+    parts = [p for p in parts if p]
+    return frozenset(parts) if len(parts) >= 2 else frozenset()
+
+
 def _alias_match(current, aliases):
     # Only strip surrounding UIA whitespace. Casefold/removing INTERNAL spaces
     # merges distinct contacts ('A B' vs 'AB'), unlike resolve_target's proof.
     cur = str(current or '').strip()
-    return bool(cur) and any(str(alias or '').strip() == cur for alias in (aliases or ()))
+    if not cur:
+        return False
+    cur_members = _member_set(cur)
+    for alias in aliases or ():
+        name = str(alias or '').strip()
+        if not name:
+            continue
+        if name == cur:
+            return True
+        # 未命名的群，会话列表标题是成员名拼起来的：DB 里的成员顺序和列表顺序
+        # 不一定一致（现场：期望 'Zzz.、shicm'，标题是 'shicm、Zzz.'），按集合比。
+        if cur_members and _member_set(name) == cur_members:
+            return True
+    return False
 
 
 def _is_blank(value):
@@ -352,9 +387,20 @@ def _is_blank(value):
     return isinstance(value, str) and value.strip() == ''
 
 
+_ATTACHMENT_ONLY = re.compile(r'[\s\ufffc]+')
+
+
 def _is_attachment(value):
-    """粘贴附件后输入框里只剩一个占位符 U+FFFC（前后可能有换行）。"""
-    return str(value if value is not None else '').strip() == '\ufffc'
+    """粘贴附件后输入框里应当只剩占位符 U+FFFC（可能带换行/空格，也可能连着多个）。
+
+    现场问题（微信 4.2.0.13）：粘贴一张图片后 UIA 读到的值不一定是恰好一个
+    U+FFFC——多选或新版会把占位符连写/夹换行。旧的「strip 后严格相等」会把
+    已经粘好的附件判成「没有附件证据」，于是不按回车、还给会话加上隔离锁。
+    这里放宽成「只由 U+FFFC 和空白组成，且至少有一个 U+FFFC」：夹带任何正文
+    仍然判为 False，粘贴失败时照样拒绝发车。
+    """
+    text = str(value if value is not None else '')
+    return '\ufffc' in text and _ATTACHMENT_ONLY.fullmatch(text) is not None
 
 
 def alias_match(current, aliases):
@@ -474,10 +520,11 @@ def guarded_send(gui, uia, hwnd, aliases, path, root, db, username, gate,
             return result('failed', 'cannot send yet: ' + problem)
         # 刚发完文字时微信输入框偶尔还有短暂残留（私聊里尤其常见），
         # 这里只「等它自己清空」，绝不替用户按删除键；等不到才失败。
+        # 现场：残留常常超过 4 秒（微信 4.2 回读更慢），所以等待放宽到约 6 秒。
         for _ in range(20):
             if _is_blank(desktop.value(control)):
                 break
-            sleep(0.2)
+            sleep(0.3)
             control = guard(require_focus=False)
             if control is None:
                 return result('cancelled', 'send gates changed while waiting for an empty input')

@@ -239,6 +239,14 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(self.send(aliases={'A B'})['status'], 'failed')
         self.assertEqual(self.keys, [])
 
+    def test_member_name_titles_match_regardless_of_order(self):
+        # 现场：DB 里群成员顺序是「Zzz.、shicm」，会话列表标题是「shicm、Zzz.」。
+        self.assertTrue(transport.alias_match('shicm、Zzz.', {'Zzz.、shicm'}))
+        self.assertTrue(transport.alias_match('成员甲，成员乙', {'成员甲、成员乙'}))
+        # 成员数量不同 / 单人名不能当成员集合匹配
+        self.assertFalse(transport.alias_match('成员甲、成员乙、成员丙', {'成员甲、成员乙'}))
+        self.assertFalse(transport.alias_match('成员甲', {'成员甲、成员乙'}))
+
     def test_filename_in_new_text_cannot_fake_delivery(self):
         marker = {'md5': 'a' * 32, 'name': 'a.gif'}
         for content in ['找不到a.gif', 'a' * 32, '<msg><title>a.gif</title></msg>']:
@@ -313,6 +321,28 @@ class TransportTest(unittest.TestCase):
         self.gui._input = SimpleNamespace(key=key)
         self.desktop.value = lambda control: '\n\ufffc\n' if 0x56 in self.keys else '\n'
         self.assertEqual(self.send()['status'], 'confirmed')
+
+    def test_multiple_attachment_placeholders_are_accepted(self):
+        # 微信 4.2 粘贴后可能读到连写的占位符（多选/新版结构），旧的「恰好一个」
+        # 判定会把已经粘好的附件当成「没有附件证据」，于是永不按回车。
+        def key(code, **kwargs):
+            self.keys.append(code)
+            if code == 0x56:
+                self.desktop.input_value = '\ufffc'
+            if code == 0x0D:
+                self.on_enter()
+
+        self.gui._input = SimpleNamespace(key=key)
+        self.desktop.value = lambda control: '\ufffc\ufffc' if 0x56 in self.keys else '\n'
+        self.assertEqual(self.send()['status'], 'confirmed')
+
+    def test_attachment_placeholder_with_text_is_still_rejected(self):
+        # 放宽证据判定不等于允许夹带正文：占位符旁边有字就是「读不懂」，不能按回车。
+        self.desktop.value = lambda control: '\ufffc 你好' if 0x56 in self.keys else '\n'
+        outcome = self.send()
+        self.assertEqual(outcome['status'], 'unconfirmed')
+        self.assertTrue(outcome['draft_may_remain'])
+        self.assertEqual(self.keys, [0x56])
 
     def test_off_after_clipboard_preparation_prevents_paste(self):
         self.gui.copy_files_to_clipboard.side_effect = lambda paths: setattr(self, 'allow', False) or True
@@ -451,6 +481,31 @@ class TransportTest(unittest.TestCase):
         self.db.search_contact = lambda key: [self.db.contacts[0]] * 50
         with self.assertRaises(ValueError):
             transport.resolve_target(self.db, 'Peer')
+
+    def test_displayed_title_is_admitted_when_contact_has_no_nick(self):
+        # 群聊 contact 行常常只有 username、nick/remark 为空：旧逻辑只拿 username
+        # 当别名，窗口标题永远匹配不上，表情包被误判成「目标没打开」。
+        self.db.contacts = [{'username': '123@chatroom', 'nick_name': '', 'remark': ''}]
+        canonical, aliases = transport.resolve_target(self.db, '某个群', '123@chatroom')
+        self.assertEqual(canonical, '123@chatroom')
+        self.assertIn('某个群', aliases)
+        self.assertIn('123@chatroom', aliases)
+
+    def test_truncated_alias_search_drops_only_that_alias(self):
+        # 显示名的搜索结果被截断（>=50 条）时，只丢这个有歧义的别名，
+        # 不能把整次解析判死（否则群里一条表情包都发不出去）。
+        self.db.contacts = [{'username': '123@chatroom', 'nick_name': '', 'remark': ''}]
+
+        def search(key):
+            if key == '某个群':
+                return [self.db.contacts[0]] * 50
+            return self.db.contacts
+
+        self.db.search_contact = search
+        canonical, aliases = transport.resolve_target(self.db, '某个群', '123@chatroom')
+        self.assertEqual(canonical, '123@chatroom')
+        self.assertNotIn('某个群', aliases)
+        self.assertIn('123@chatroom', aliases)
 
 
 from bridge_ast import init, load_function
@@ -632,10 +687,11 @@ class BridgeContractTest(unittest.TestCase):
                                             _uia=SimpleNamespace(current_chat=lambda: 'Peer',
                                                                  open_chat=Mock(return_value=True))),
                         resolve_sticker_target=Mock(return_value=('peer', {'Peer'})),
+                        aliases_for=Mock(return_value=[]),
                         sticker_alias_match=transport.alias_match,
                         force_foreground=Mock(return_value=True),
                         snapshot_win_state=Mock(return_value={'hwnd': 100, 'iconic': False, 'fg': 0}),
-                        restore_win_state=Mock(), log_throttled=Mock(),
+                        restore_win_state=Mock(), log_throttled=Mock(), log=Mock(),
                         guarded_sticker_send=Mock(return_value=transport.result('confirmed')),
                         _compat_mod=lambda: SimpleNamespace(pinned_window=lambda: 100),
                         ROOT=str(ROOT), os=os, db=FakeDB(), SEND_STATE={'active': False, 'start': 0},
@@ -690,11 +746,67 @@ class BridgeContractTest(unittest.TestCase):
         self.assertEqual(env['send_sticker']('fake.png', 'Peer', 'peer', 'g1', 'one-shot')['status'], 'failed')
         env['guarded_sticker_send'].assert_not_called()
 
+    def test_bridge_waits_for_title_instead_of_clicking_when_unreadable(self):
+        # 标题短时读成 None 时只等刷新；点会话行会让 4.2 的 current_chat 更长时间读不到。
+        env = self.send_environment()
+        reads = {'n': 0}
+
+        def chat():
+            reads['n'] += 1
+            return None if reads['n'] < 3 else 'Peer'
+
+        env['gui']._uia = SimpleNamespace(current_chat=chat, open_chat=Mock(return_value=True))
+        self.assertEqual(env['send_sticker']('fake.png', 'Peer', 'peer', 'g1', 'one-shot')['status'], 'confirmed')
+        env['gui']._uia.open_chat.assert_not_called()
+
+    def test_bridge_never_clicks_conversation_when_title_stays_unreadable(self):
+        env = self.send_environment()
+        env['gui']._uia = SimpleNamespace(current_chat=lambda: None, open_chat=Mock(return_value=True))
+        outcome = env['send_sticker']('fake.png', 'Peer', 'peer', 'g1', 'one-shot')
+        self.assertEqual(outcome['status'], 'failed')
+        env['gui']._uia.open_chat.assert_not_called()
+        env['guarded_sticker_send'].assert_not_called()
+
     def test_bridge_bind_failure_never_transports(self):
         env = self.send_environment()
         env['gui'].use_window.return_value = False
         self.assertEqual(env['send_sticker']('fake.png', 'Peer', 'peer', 'g1', 'one-shot')['status'], 'failed')
         env['gui'].use_window.assert_called_once_with(100)
+        env['guarded_sticker_send'].assert_not_called()
+
+    def test_bridge_resolution_failure_has_its_own_reason(self):
+        # 以前「会话解析失败」和「窗口没切过去」共用同一句 target is not open，
+        # 日志里分不出是哪一步，白查半天。
+        env = self.send_environment()
+        env['resolve_sticker_target'].side_effect = ValueError('contact search is unavailable or truncated')
+        outcome = env['send_sticker']('fake.png', 'Peer', 'peer', 'g1', 'one-shot')
+        self.assertEqual(outcome['status'], 'failed')
+        self.assertIn('session could not be resolved', outcome['error'])
+        self.assertNotIn('not open in the pinned window', outcome['error'])
+        env['log'].assert_called()
+        env['guarded_sticker_send'].assert_not_called()
+
+    def test_bridge_accepts_group_member_name_title_from_aliases_for(self):
+        # 现场：群在 contact.db 里没有名字，会话列表显示「成员甲、成员乙」。
+        # 解析只拿到 username，窗口标题永远对不上 → 群里一条表情包也发不出去。
+        env = self.send_environment()
+        env['resolve_sticker_target'].return_value = ('123@chatroom', {'123@chatroom'})
+        env['aliases_for'].return_value = ['成员甲、成员乙']
+        env['gui']._uia = SimpleNamespace(
+            current_chat=lambda: '成员甲、成员乙', open_chat=Mock(return_value=True))
+        outcome = env['send_sticker']('fake.png', '', '123@chatroom', 'g1', 'one-shot')
+        self.assertEqual(outcome['status'], 'confirmed')
+        env['aliases_for'].assert_called()
+        env['gui']._uia.open_chat.assert_not_called()
+
+    def test_bridge_title_mismatch_still_logs_expected_aliases(self):
+        env = self.send_environment()
+        env['gui']._uia = SimpleNamespace(
+            current_chat=lambda: 'Wrong chat', open_chat=Mock(return_value=True))
+        self.assertEqual(env['send_sticker']('fake.png', 'Peer', 'peer', 'g1', 'one-shot')['status'], 'failed')
+        logged = ' '.join(str(call) for call in env['log'].call_args_list)
+        self.assertIn('Wrong chat', logged)
+        self.assertIn('Peer', logged)
         env['guarded_sticker_send'].assert_not_called()
 
     def test_bridge_rechecks_switch_after_lock_wait(self):
@@ -758,15 +870,22 @@ class BridgeContractTest(unittest.TestCase):
         env['guarded_sticker_send'].assert_not_called()
         env['log_throttled'].assert_called()
 
-    def test_quarantine_requires_observed_nonempty_then_exact_target_empty(self):
+    def test_quarantine_releases_as_soon_as_target_input_reads_empty(self):
+        # 微信 4.2 粘贴后可能一直读到空串，draft_observed 于是永远为 False；
+        # 旧逻辑要求「先看见非空草稿」，隔离锁再也解不开——之后每条都被
+        # must be cleared 挡住，只能重启桥接。读到空输入框本身就是清空证据。
         env, pattern, uia = self.quarantine_environment(observed=False, value='')
-        self.assertFalse(env['sticker_quarantine_allows']('peer', 'Peer'))
-        pattern.Value = '\ufffc'
-        self.assertFalse(env['sticker_quarantine_allows']('peer', 'Peer'))
-        pattern.Value = ''  # operator manually cleared it; no automation keys
         self.assertTrue(env['sticker_quarantine_allows']('peer', 'Peer'))
         self.assertNotIn('peer', env['sticker_draft_quarantine'])
         env['gui'].use_window.assert_not_called()
+
+    def test_quarantine_stays_locked_while_a_draft_is_visible(self):
+        env, pattern, _ = self.quarantine_environment(observed=False, value='草稿')
+        self.assertFalse(env['sticker_quarantine_allows']('peer', 'Peer'))
+        self.assertIn('peer', env['sticker_draft_quarantine'])
+        pattern.Value = ''  # 用户手动清空后自动解锁
+        self.assertTrue(env['sticker_quarantine_allows']('peer', 'Peer'))
+        self.assertNotIn('peer', env['sticker_draft_quarantine'])
 
     def test_manually_cleared_newline_releases_quarantine_without_keys(self):
         env, pattern, _ = self.quarantine_environment(observed=True, value='\n')
