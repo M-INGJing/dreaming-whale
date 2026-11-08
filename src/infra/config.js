@@ -221,12 +221,12 @@ const DEFAULT_CONFIG = {
       skipChance: 0.3,
       jitterMinutes: 20,
       maxVideos: 5,
-      maxWakesPerDay: 1,
+      maxWakesPerDay: 2,
       maxMinutes: 45,
     },
     share: { enabled: true, minScore: 13, daily: 3, minGapMinutes: 120, silentAfterDays: 3, chats: [] },
     risk: { minGapMs: 1500, readHourly: 120, readDaily: 400, writeHourly: 0, writeDaily: 0, writeGapSec: 120 },
-    diary: { enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 200, maxCharsPerDay: 1500 },
+    diary: { enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 400, maxCharsPerDay: 3000, maxEntriesPerDay: 4 },
     // 评论区说话方式：只学「气口」（短句/口头禅），最多 20 条、30 天不用就衰减；聊天里最多注入 3 条
     style: { enabled: true },
     write: { enabled: false },
@@ -454,6 +454,7 @@ function loadConfig({ root = projectRoot(), env = process.env, readOnly = false 
     }
   }
   const cfg = deepMerge(DEFAULT_CONFIG, fromFile);
+  sanitizeBiliConfig(cfg);
   // 表情包不再按概率发送（分类由模型标记决定），旧的 chances / genericChance
   // 即使还留在 config.json 里也不参与运行，这里不再做任何兼容搬移。
   // 老配置迁移（在 env 覆盖之前做，避免把用户的 env 设置改掉）
@@ -502,6 +503,42 @@ function loadConfig({ root = projectRoot(), env = process.env, readOnly = false 
     configExists,
     configError,
   };
+}
+
+/**
+ * B 站配置的防御性清洗：曾经出现过启动器把对象数组写成 "[object Object]"
+ * 的情况（窗口/白名单群全部失效，而且不报错）。这里把「字符串形式的 JSON」
+ * 还原成对象，还原不了的就丢掉，宁可回到默认值也别静默失效。
+ */
+function sanitizeBiliConfig(cfg) {
+  const bili = cfg && cfg.bili;
+  if (!bili || typeof bili !== 'object') return;
+  bili.night = bili.night && typeof bili.night === 'object' ? bili.night : {};
+  bili.share = bili.share && typeof bili.share === 'object' ? bili.share : {};
+  bili.night.windows = sanitizeRows(bili.night.windows, (row) => ({
+    start: String(row.start || '').trim(),
+    end: String(row.end || '').trim(),
+    wakes: Number(row.wakes) || 1,
+  })).filter((row) => row.start && row.end);
+  bili.share.chats = sanitizeRows(bili.share.chats, (row) => ({
+    chatId: String(row.chatId || '').trim(),
+    name: String(row.name || '').trim(),
+    daily: Number(row.daily) || 1,
+  })).filter((row) => row.chatId);
+}
+
+function sanitizeRows(list, mapFn) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const raw of list) {
+    let row = raw;
+    if (typeof row === 'string') {
+      try { row = JSON.parse(row); } catch { row = null; }
+    }
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    out.push(mapFn(row));
+  }
+  return out;
 }
 
 /** 首次运行时生成 config.json，方便用户直接编辑 */

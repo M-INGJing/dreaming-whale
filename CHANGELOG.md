@@ -77,6 +77,12 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 改进 · 日记长度/数量上限翻倍，并修复被写坏的 B 站配置
+
+- 日记上限翻倍：`maxCharsPerDay` 1500→**3000**、`digestTokens` 200→**400**、每天自动醒 1→**2** 次；新增 `diary.maxEntriesPerDay`（默认 **4** 段/天，防止手动跑很多次写成流水账）。
+- 修复一个真实隐患：`bili.night.windows` / `bili.share.chats` 曾被写成 `["[object Object]"]`（窗口和群白名单静默失效）。`loadConfig` 现在会做防御性清洗：字符串形式的 JSON 还原为对象，还原不了的丢掉，正常数组原样保留。
+- 新增 `tests/bili-config-sanitize.test.js`(4) 与日记段数上限测试；`lint/check` 全绿。
+
 ### 新增 · 启动器展示 B 站日记与看过的视频
 
 - 新增 `src/services/bili/diaryView.js`：按天聚合两本日记正文、当天看过的视频（标题来自 feed 日志）、分享条数；只读，不写任何文件。

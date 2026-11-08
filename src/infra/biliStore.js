@@ -100,6 +100,12 @@ function appendDiary(config, kind, date, body) {
   const existing = readText(file);
   const key = diaryFormat.today(date);
   const existingToday = diaryFormat.digestOf(existing, date, 100000);
+  // 当天段数上限：一天醒好几次（含手动跑）时，日记不至于变成流水账
+  const maxEntries = Math.max(0, Number(config && config.bili && config.bili.diary && config.bili.diary.maxEntriesPerDay) || 0);
+  if (maxEntries && existingToday) {
+    const paragraphs = existingToday.split(/\n{2,}/).filter(Boolean).length;
+    if (paragraphs >= maxEntries) return '';
+  }
   // 当天字数上限：防止一天醒好几次把日记写成流水账（也防止 token 失控）
   const cap = Math.max(0, Number(config && config.bili && config.bili.diary && config.bili.diary.maxCharsPerDay) || 0);
   if (cap && existingToday.length + text.length > cap) {

@@ -81,6 +81,7 @@ const FIELDS = {
   'bili.diary.enabled': { type: 'bool' },
   'bili.diary.digestTokens': { type: 'int', min: 50, max: 2000 },
   'bili.diary.maxCharsPerDay': { type: 'int', min: 0, max: 20000 },
+  'bili.diary.maxEntriesPerDay': { type: 'int', min: 1, max: 50 },
   'bili.style.enabled': { type: 'bool' },
   'bili.write.enabled': { type: 'bool' },
 

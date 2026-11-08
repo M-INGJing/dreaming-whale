@@ -36,6 +36,14 @@ test('clock：窗口内按「日期+窗口」的固定抖动推迟，不是一�
   assert.equal(clock.shouldWake(opts, {}, after, () => 0.99).wake, true);
 });
 
+test('diary 段数上限：同一天超过 maxEntriesPerDay 就整条跳过', () => {
+  const { config } = tmpConfig({ bili: { diary: { enabled: true, maxCharsPerDay: 0, maxEntriesPerDay: 2 } } });
+  assert.ok(biliStore.appendDiary(config, 'owner', at(10), '第一段'));
+  assert.ok(biliStore.appendDiary(config, 'owner', at(11), '第二段'));
+  assert.equal(biliStore.appendDiary(config, 'owner', at(12), '第三段'), '', '同一天最多 2 段');
+  fs.rmSync(path.dirname(config.paths.dataDir), { recursive: true, force: true });
+});
+
 test('diary 上限：当天写满后不再追加，剩余太少就整条跳过', () => {
   const { config } = tmpConfig({ bili: { diary: { enabled: true, maxCharsPerDay: 200 } } });
   const file = biliStore.appendDiary(config, 'owner', at(10), '甲'.repeat(150));
