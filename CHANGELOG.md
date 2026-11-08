@@ -77,6 +77,16 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 改进 · B 站收尾（抖动/沉默衰减/短链/日记上限）与启动器页补齐
+
+- 作息：进窗口后按「日期 + 窗口」的固定抖动推迟（`bili.night.jitterMinutes`，默认 20 分钟），不再天天同一分钟开跑。
+- 分享：主人沉默超过 `bili.share.silentAfterDays` 天就跳过分享（之前逻辑写了但调度器永远传 0）。
+- 链接：支持 `b23.tv` / `bili2233.cn` 短链（跟 302 解析出 BV，最多 3 跳；失败退回普通链接阅读器）。
+- 日记：`bili.diary.maxCharsPerDay`（默认 1500）限制当天两本日记的总字数，写满后不再追加。
+- 启动器 B 站页补齐：运行状态（今日醒/配额/日记/分享/说话习惯/下次窗口）、「只看会选什么」「现在跑一轮」、作息/预算/分享/白名单群编辑、说话习惯查看与清空。
+- 内核新增 `GET /api/bili/style`、`POST /api/bili/style/clear`；`/api/bili/status` 追加 night/risk/shareCfg/style 字段。
+- 新增 `tests/bili-p4fix.test.js`(5)：抖动、日记上限、短链解析、短链读取、沉默不分享。
+
 ### 新增 · B 站日记问答与评论区说话方式（P2.5）
 
 - 问「你今天看了啥 / 日记 / 刷了什么」时，把**当天日记摘要**（≤200 token）注入最后一轮；普通聊天不注入，`features.bili` 关掉整块为空。

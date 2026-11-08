@@ -60,8 +60,19 @@ function windowAt(windows, date) {
   return null;
 }
 
+/** 稳定哈希：同一个日期 + 同一个窗口 → 同一个抖动值（不用随机数，重启不换点）。 */
+function seedOf(text) {
+  let h = 2166136261;
+  const s = String(text || '');
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 /**
- * @param {object} opts { windows, skipChance, maxWakesPerDay }
+ * @param {object} opts { windows, skipChance, maxWakesPerDay, jitterMinutes }
  * @param {object} state { date, wakes, skipped }
  * @param {Date} now
  * @param {() => number} rng
@@ -77,6 +88,13 @@ function shouldWake(opts, state, now, rng = Math.random) {
   if (s.wakes >= max) return { wake: false, reason: 'already_awake' };
   const win = windowAt(windows, now);
   if (!win) return { wake: false, reason: 'outside_window' };
+  // 抖动：进窗口后先等一个「每天固定、每个窗口不同」的分钟数，避免天天同一分钟开跑
+  const jitter = Math.max(0, Math.min(240, Number(opts && opts.jitterMinutes) || 0));
+  if (jitter > 0) {
+    const offset = seedOf(today + '|' + win.start) % (jitter + 1);
+    const sinceStart = (minutesOfDay(now) - win.start + MINUTES_DAY) % MINUTES_DAY;
+    if (sinceStart < offset) return { wake: false, reason: 'jitter', window: win };
+  }
   const chance = Math.max(0, Math.min(1, Number(opts && opts.skipChance) || 0));
   if (chance > 0 && rng() < chance) return { wake: false, reason: 'skip_roll', skipped: true, window: win };
   // 同一窗口里分配的 wakes 次数：按窗口序号均分，避免一个窗口把额度用光。
@@ -101,4 +119,4 @@ function nextWindowIn(windows, date) {
   return best;
 }
 
-module.exports = { parseClock, minutesOfDay, dayKey, normalizeWindows, windowAt, shouldWake, nextWindowIn, MINUTES_DAY };
+module.exports = { parseClock, minutesOfDay, dayKey, normalizeWindows, windowAt, shouldWake, nextWindowIn, seedOf, MINUTES_DAY };

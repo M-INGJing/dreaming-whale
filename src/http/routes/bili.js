@@ -49,6 +49,23 @@ module.exports = function register(router) {
         quota: { readHour: q.readHour, readDay: q.readDay, writeDay: q.writeDay },
         windows: clock.normalizeWindows(night.windows),
         nextWakeMinutes: clock.nextWindowIn(night.windows, now),
+        night: {
+          skipChance: Number(night.skipChance) || 0,
+          maxWakesPerDay: Number(night.maxWakesPerDay) || 1,
+          jitterMinutes: Number(night.jitterMinutes) || 0,
+          maxVideos: Number(night.maxVideos) || 5,
+          maxMinutes: Number(night.maxMinutes) || 45,
+        },
+        risk: {
+          readHourly: Number((runtime.config.bili && runtime.config.bili.risk && runtime.config.bili.risk.readHourly)) || 0,
+          readDaily: Number((runtime.config.bili && runtime.config.bili.risk && runtime.config.bili.risk.readDaily)) || 0,
+        },
+        shareCfg: {
+          enabled: !(runtime.config.bili && runtime.config.bili.share && runtime.config.bili.share.enabled === false),
+          daily: Number(runtime.config.bili && runtime.config.bili.share && runtime.config.bili.share.daily) || 0,
+          minGapMinutes: Number(runtime.config.bili && runtime.config.bili.share && runtime.config.bili.share.minGapMinutes) || 0,
+          chats: (runtime.config.bili && runtime.config.bili.share && runtime.config.bili.share.chats) || [],
+        },
         diary: biliStore.diarySummary(runtime.config, now),
         style: (() => {
           const data = biliStore.readJson(biliStore.paths(runtime.config).style, {});
@@ -78,7 +95,19 @@ module.exports = function register(router) {
     }
   });
 
-  // 日记只回计数与今天的字数，不回正文（正文只在启动器外的人工查看 / 后续聊天注入里用）。
+  // 说话习惯：只给短语与计数，不给评论原文（本来也没存）
+  router.get('/api/bili/style', (runtime, req, res) => {
+    const data = biliStore.readJson(biliStore.paths(runtime.config).style, {});
+    const items = (Array.isArray(data.items) ? data.items : []).slice(0, 50).map((row) => ({
+      text: String(row.text || ''), mentions: Number(row.mentions) || 1, lastSeenAt: Number(row.lastSeenAt) || 0,
+    }));
+    return json(res, 200, { ok: true, items, updatedAt: Number(data.updatedAt) || 0 });
+  });
+
+  router.post('/api/bili/style/clear', (runtime, req, res) => {
+    biliStore.writeJson(biliStore.paths(runtime.config).style, { updatedAt: Date.now(), items: [] });
+    return json(res, 200, { ok: true });
+  });
   router.get('/api/bili/diary', (runtime, req, res) => {
     const now = new Date();
     return json(res, 200, { ok: true, summary: biliStore.diarySummary(runtime.config, now) });

@@ -742,10 +742,10 @@ class Bot {
     // 群聊触发判定后再并行获取链接和搜索资料，避免无关消息消耗网络预算。
     const linkUrls = (this.config.links && this.config.links.enabled === false)
       ? [] : links.extractUrls(clean.text || '');
-    // B 站养鱼（只读）：开关打开且链接是 B 站视频时，优先读「页面信息+字幕+热评」，
+    // B 站养鱼（只读）：开关打开且链接是 B 站视频（含 b23.tv 短链）时，优先读「页面信息+字幕+热评」，
     // 读不到再退回普通链接阅读器。关掉开关 = 完全不碰这条分支。
     const biliUrl = features.isOn(this.config, 'bili')
-      ? linkUrls.find((u) => biliWatch.isVideoUrl(u)) || '' : '';
+      ? linkUrls.find((u) => biliWatch.isVideoUrl(u) || biliWatch.isShortLink(u)) || '' : '';
     const linkTask = biliUrl
       ? biliWatch.readVideo(this.config, biliUrl, { logger: this.logger })
         .then((text) => text || (linkUrls.length ? this.readLink(linkUrls[0], key) : ''))

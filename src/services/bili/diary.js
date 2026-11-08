@@ -84,9 +84,15 @@ async function writeRound(opts = {}) {
   }
   if (!owner) owner = templateOwner(watched);
   if (!self) self = templateSelf(watched);
-  biliStore.appendDiary(config, 'owner', date, owner);
-  biliStore.appendDiary(config, 'self', date, self);
-  return { ownerChars: owner.length, selfChars: self.length, usedModel };
+  const ownerFile = biliStore.appendDiary(config, 'owner', date, owner);
+  const selfFile = biliStore.appendDiary(config, 'self', date, self);
+  return {
+    ownerChars: ownerFile ? owner.length : 0,
+    selfChars: selfFile ? self.length : 0,
+    usedModel,
+    // 当天写满（字数上限）时两本都可能没写，调用方据此决定要不要记事件
+    capped: !ownerFile || !selfFile,
+  };
 }
 
 module.exports = { writeRound, SYSTEM, materialsText, templateOwner, templateSelf, parseModelOutput };

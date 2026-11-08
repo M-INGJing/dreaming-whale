@@ -95,11 +95,18 @@ function appendDiary(config, kind, date, body) {
   const p = paths(config);
   const file = kind === 'self' ? p.diarySelf : p.diaryOwner;
   ensureDir(file);
-  const text = String(body == null ? '' : body).trim();
+  let text = String(body == null ? '' : body).trim();
   if (!text) return '';
   const existing = readText(file);
   const key = diaryFormat.today(date);
   const existingToday = diaryFormat.digestOf(existing, date, 100000);
+  // 当天字数上限：防止一天醒好几次把日记写成流水账（也防止 token 失控）
+  const cap = Math.max(0, Number(config && config.bili && config.bili.diary && config.bili.diary.maxCharsPerDay) || 0);
+  if (cap && existingToday.length + text.length > cap) {
+    const remain = cap - existingToday.length;
+    if (remain < 60) return ''; // 当天写满了，这次就不写
+    text = text.slice(0, remain);
+  }
   let next;
   if (existingToday) {
     // 同一天再醒：续写在文件末尾（当天那节一定在最后，因为只按时间顺序追加）

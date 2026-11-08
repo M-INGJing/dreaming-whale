@@ -1,6 +1,6 @@
 # 鲸鲸养鱼计划：把「刷 B 站 / 看视频 / 写日记」接进 whale_girl
 
-> 状态：**P0/P0.5/P1/P2/P2.5 完成**（日记问答 + 评论区说话方式学习）。参考项目：[`dsh-bili-whale`](https://github.com/Alterssss/dsh-bili-whale) 0.4.6（已 clone 到 `D:\workspace\whale\dsh-bili-whale`）。
+> 状态：**P0/P0.5/P1/P2/P2.5/P4 完成**（P3 写操作仍未做，默认关）。参考项目：[`dsh-bili-whale`](https://github.com/Alterssss/dsh-bili-whale) 0.4.6（已 clone 到 `D:\workspace\whale\dsh-bili-whale`）。
 > 已完成（2026-11-08）：
 > - `src/adapters/bili/wbi.js` WBI 签名（官方测试向量 `ea1db124…` 对齐）
 > - `src/adapters/bili/api.js` 客户端（cookie/Referer、全局限速、nav 密钥 10 分钟缓存、网络重试、`code!=0` 统一错误；未登录 `-101` 也能拿匿名签名密钥）

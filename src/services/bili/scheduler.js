@@ -26,6 +26,30 @@ function biliConfig(config) {
 }
 
 /**
+ * 主人多久没说话了（天）。用于「主人沉默太久就不主动分享」：
+ * 只读记忆里的私聊消息，不看群；读不到就按 0 天算（宁可不因为读不到而静默）。
+ */
+function masterSilenceDays(runtime, config, now = new Date()) {
+  const names = ((config && config.persona && config.persona.master && config.persona.master.names) || [])
+    .map((n) => String(n || '').trim()).filter(Boolean);
+  if (!names.length || !runtime || !runtime.store) return 0;
+  let last = 0;
+  try {
+    for (const key of runtime.store.sessions.keys()) {
+      if (!String(key).startsWith('wechat:u:')) continue;
+      const msgs = runtime.store.messages(key, 50) || [];
+      for (const m of msgs) {
+        if (!m || m.role !== 'user' || !names.includes(String(m.name || '').trim())) continue;
+        const ts = Number(m.ts) || 0;
+        if (ts > last) last = ts;
+      }
+    }
+  } catch { return 0; }
+  if (!last) return 0;
+  return Math.max(0, (now.getTime() - last) / 86400000);
+}
+
+/**
  * 主人的 wxid：优先 config.persona.master.wxids；
  * 没填时从记忆里的私聊会话反查（找最近说过话、名字在 master.names 里的那个私聊）。
  * 反查只是「知道该发给谁」，不改配置；分享目标仍然只允许主人私聊或白名单群。
@@ -58,6 +82,7 @@ function createBiliScheduler(opts = {}) {
   const logger = opts.logger || (runtime && runtime.logger) || null;
   const nowFn = opts.now || (() => new Date());
   const rng = opts.rng || Math.random;
+  const silenceFn = opts.masterSilenceDays || ((config, now) => masterSilenceDays(runtime, config, now));
   const fetchFeed = opts.fetchFeed || feedService.fetchFeed;
   const readVideo = opts.readVideo || ((config, url, deps) => biliWatch.readVideo(config, url, deps));
   // 读一次拿「摘要 + 结构化热评」：摘要进日记，热评进「评论说话方式」学习。
@@ -113,6 +138,7 @@ function createBiliScheduler(opts = {}) {
       windows: night.windows,
       skipChance: night.skipChance,
       maxWakesPerDay: night.maxWakesPerDay,
+      jitterMinutes: night.jitterMinutes,
     }, state, now, rng);
     return { ...out, state, night };
   }
@@ -190,7 +216,10 @@ function createBiliScheduler(opts = {}) {
         outbox.sweepStale(cfg);
         const best = ranked[0];
         const verdict = outbox.canShare(cfg, {
-          score: best ? best.score : 0, now, silentDays: 0, masterWxid: resolveMasterWxid(runtime, cfg),
+          score: best ? best.score : 0,
+          now,
+          silentDays: silenceFn(cfg, now),
+          masterWxid: resolveMasterWxid(runtime, cfg),
         });
         if (verdict.ok && best) {
           const items = [];

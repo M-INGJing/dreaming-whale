@@ -64,6 +64,7 @@ const FIELDS = {
   'bili.night.skipChance': { type: 'float', min: 0, max: 1 },
   'bili.night.maxVideos': { type: 'int', min: 1, max: 20 },
   'bili.night.maxWakesPerDay': { type: 'int', min: 1, max: 10 },
+  'bili.night.jitterMinutes': { type: 'int', min: 0, max: 240 },
   'bili.night.maxMinutes': { type: 'int', min: 1, max: 240 },
   'bili.share.enabled': { type: 'bool' },
   'bili.share.minScore': { type: 'float', min: -20, max: 40 },
@@ -78,6 +79,7 @@ const FIELDS = {
   'bili.risk.writeGapSec': { type: 'int', min: 0, max: 3600 },
   'bili.diary.enabled': { type: 'bool' },
   'bili.diary.digestTokens': { type: 'int', min: 50, max: 2000 },
+  'bili.diary.maxCharsPerDay': { type: 'int', min: 0, max: 20000 },
   'bili.style.enabled': { type: 'bool' },
   'bili.write.enabled': { type: 'bool' },
 

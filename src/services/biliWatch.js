@@ -14,6 +14,7 @@ const path = require('node:path');
 const { createClient } = require('../adapters/bili/api');
 const endpoints = require('../adapters/bili/endpoints');
 const { readCookie } = require('../infra/biliCookie');
+const { resolveUrl: resolveShortUrl } = require('./bili/resolve');
 
 const MARK = '【B站视频】';
 const DIGEST_MAX = 1200;
@@ -22,16 +23,38 @@ const DESC_EXCERPT = 220;
 const REPLY_MAX = 2;
 const TIMEOUT_MS = 6000;
 
-/** 只认 bilibili.com 的视频页；b23.tv 短链要跟一次跳转，留给 P0.5。 */
+/** 只认 bilibili.com 的视频页；b23.tv / bili2233.cn 短链要先解析（见 isShortLink / readVideo）。 */
 function isVideoUrl(url) {
   try {
     const u = new URL(String(url || ''));
     const host = u.hostname.toLowerCase();
     if (host === 'b23.tv' || host.endsWith('.b23.tv')) return false;
+    if (host === 'bili2233.cn' || host.endsWith('.bili2233.cn')) return false;
     if (host !== 'bilibili.com' && !host.endsWith('.bilibili.com')) return false;
     return /\/video\//.test(u.pathname) || Boolean(endpoints.parseBvid(String(url || '')));
   } catch {
     return false;
+  }
+}
+
+/** 短链（b23.tv / bili2233.cn）：需要跟一次 302 才能拿到真正的视频地址。 */
+function isShortLink(url) {
+  try {
+    const u = new URL(String(url || ''));
+    const host = u.hostname.toLowerCase();
+    return host === 'b23.tv' || host.endsWith('.b23.tv') || host === 'bili2233.cn' || host.endsWith('.bili2233.cn');
+  } catch {
+    return false;
+  }
+}
+
+/** 把「可能是短链」的地址解析成视频页地址；解析不到返回 ''。 */
+async function resolveVideoUrl(url, deps = {}) {
+  const resolve = deps.resolveUrl || resolveShortUrl;
+  try {
+    return await resolve(url, deps.resolveDeps || {});
+  } catch {
+    return '';
   }
 }
 
@@ -81,7 +104,9 @@ function buildDigest(materials) {
  * @returns {Promise<string>} 失败返回 ''
  */
 async function readVideo(config, url, deps = {}) {
-  const bvid = endpoints.parseBvid(url);
+  let target = String(url || '');
+  if (isShortLink(target)) target = await resolveVideoUrl(target, deps);
+  const bvid = endpoints.parseBvid(target);
   if (!bvid) return '';
   const logger = deps.logger || null;
   try {
@@ -105,7 +130,9 @@ async function readVideo(config, url, deps = {}) {
  * @returns {Promise<{digest:string, info:object|null, replies:object[]}>}
  */
 async function readMaterials(config, url, deps = {}) {
-  const bvid = endpoints.parseBvid(url);
+  let target = String(url || '');
+  if (isShortLink(target)) target = await resolveVideoUrl(target, deps);
+  const bvid = endpoints.parseBvid(target);
   if (!bvid) return { digest: '', info: null, replies: [] };
   try {
     const root = deps.root
@@ -126,4 +153,7 @@ async function readMaterials(config, url, deps = {}) {
   }
 }
 
-module.exports = { MARK, DIGEST_MAX, SUBTITLE_EXCERPT, isVideoUrl, buildDigest, readVideo, readMaterials, fmtCount, fmtDuration };
+module.exports = {
+  MARK, DIGEST_MAX, SUBTITLE_EXCERPT, isVideoUrl, isShortLink, resolveVideoUrl,
+  buildDigest, readVideo, readMaterials, fmtCount, fmtDuration,
+};
