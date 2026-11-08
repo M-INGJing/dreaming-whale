@@ -98,8 +98,8 @@ public sealed class StickerPendingWindow : Window
         }
         else
         {
-            hint.Text = "共 " + pendingCount + " 张待定。选个分类点「归档」，或直接删掉。";
-            foreach (var item in items.EnumerateArray()) list.Children.Add(BuildRow(item, false));
+            hint.Text = "共 " + pendingCount + " 张等你确认。选个分类点「归档」，或直接删掉。";
+            foreach (var item in items.EnumerateArray()) list.Children.Add(BuildRow(item, true));
         }
 
         var recent = res.Prop("recent");
@@ -149,7 +149,7 @@ public sealed class StickerPendingWindow : Window
 
         var text = new TextBlock
         {
-            Text = (showCategory && category.Length > 0 ? "【" + category + "】" : "")
+            Text = (showCategory && category.Length > 0 && category != "待定" ? "【建议：" + category + "】" : "")
                 + (desc.Length > 0 ? desc : "（还没描述）") + "\n"
                 + (chatType == "group" ? "群聊" : "私聊") + (sender.Length > 0 ? " · " + sender : ""),
             TextWrapping = TextWrapping.Wrap,

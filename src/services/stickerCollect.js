@@ -155,6 +155,8 @@ function collect(runtime, payload = {}, deps = {}) {
     confidence: 0,
     tags: [],
     description: '',
+    // 人工确认过没有？没确认就一直留在「收藏待定」（即使已经自动归类）
+    reviewed: false,
     source: {
       chatType,
       chatIdHash: chatIdHash(payload.chatId || ''),
@@ -192,18 +194,28 @@ function status(runtime) {
   };
 }
 
-function pendingList(runtime, limit = 50) {  const config = runtime.config;
+/**
+ * 「收藏待定」= 还没人工确认过的（reviewed !== true），不按分类算。
+ * 自动归类之后仍然留在待定里，直到人工归档或删除；这样不会「下次点开就消失」。
+ */
+function pendingList(runtime, limit = 50) {
+  const config = runtime.config;
   const root = config.root || process.cwd();
   const index = indexer.ensure(config, root);
   const dir = stickers.stickerDir(config, root);
   const out = [];
   for (const [sha, row] of Object.entries(index.items)) {
-    if (!row || row.category !== PENDING_DIR) continue;
+    if (!row) continue;
+    // 老数据没有 reviewed 字段：按分类判断，避免把历史 30 多张全塞进待定
+    const unreviewed = row.reviewed === false || (row.reviewed === undefined && row.category === PENDING_DIR);
+    if (!unreviewed) continue;
     out.push({
       sha,
       file: row.file,
       path: path.join(dir, row.file),
       description: row.description || '',
+      category: row.category || '',
+      confidence: row.confidence || 0,
       sender: (row.source && row.source.sender) || '',
       chatType: (row.source && row.source.chatType) || '',
       addedAt: row.addedAt || 0,
@@ -223,6 +235,7 @@ function recentList(runtime, limit = 20) {
   const out = [];
   for (const [sha, row] of Object.entries(index.items)) {
     if (!row) continue;
+    if (row.reviewed === false) continue; // 未人工确认的只出现在「待定」里
     out.push({
       sha,
       file: row.file,

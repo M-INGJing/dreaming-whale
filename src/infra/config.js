@@ -212,12 +212,14 @@ const DEFAULT_CONFIG = {
       fromPrivate: true,
       skipFromMaster: false,   // 主人发也收（用户选择）
       maxPerDay: 30,
-      maxFileBytes: 2 * 1024 * 1024,
+      maxFileBytes: 8 * 1024 * 1024,
       dhashDistance: 6,
       sameFormatOnly: true,
       minConfidence: 0.6,
       pendingTtlDays: 0,       // 0 = 待定永不自动删
       allowNewCategories: true,
+      // 分类优先级低于回复：新收藏先晾一会儿，worker 每 15 秒才看一次
+      classifyDelaySec: 60,
     },
   },
   // B 站养鱼（只读）：总闸是 features.bili，这里是作息/偏好/预算/日记的默认值。

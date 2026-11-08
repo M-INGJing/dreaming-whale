@@ -117,7 +117,13 @@ def collect_async(runtime, msg, raw, log=None, http=None, mime='image/png', acco
                     headers=runtime.sticker_headers,
                     timeout=20,
                 )
-                return resp.json() if getattr(resp, 'status_code', 0) == 200 else {}
+                # 400 也要读 body：失败原因（too_large / daily_cap …）就在里面，
+                # 以前只读 200，日志里只剩「未收（）」，完全看不出为什么。
+                try:
+                    body = resp.json()
+                except Exception:  # noqa: BLE001
+                    body = {}
+                return body if isinstance(body, dict) else {}
 
             submit(post_json, send_raw, chat_type, chat_id, sender, log=log, mime=send_mime)
         except Exception as exc:  # noqa: BLE001

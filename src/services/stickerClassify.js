@@ -173,18 +173,28 @@ async function classifyOne(runtime, job, deps = {}) {
 
 let running = false;
 
-/** 处理队列里的任务；返回统计。 */
+/**
+ * 处理队列里的任务；返回统计。
+ * 分类优先级低于回复：新收藏先等 classifyDelaySec 秒，worker 本身也只每 15 秒跑一次。
+ */
 async function processQueue(runtime, deps = {}) {
   if (running) return { skipped: true, done: 0, pending: 0, dropped: 0 };
   running = true;
   const config = runtime.config;
   const root = config.root || process.cwd();
-  const stats = { done: 0, pending: 0, dropped: 0, skipped: false };
+  const now = deps.now || Date.now();
+  const delayMs = Math.max(0, Number(classifyConfig(config).classifyDelaySec) || 0) * 1000;
+  const stats = { done: 0, pending: 0, dropped: 0, skipped: false, deferred: 0 };
   try {
     const jobs = collect.readQueue(config, root);
     if (!jobs.length) return stats;
     const keep = [];
     for (const job of jobs) {
+      if (delayMs && job.at && now - job.at < delayMs) {
+        keep.push(job);
+        stats.deferred += 1;
+        continue;
+      }
       let result = 'skip';
       try {
         result = await classifyOne(runtime, job, deps);
@@ -217,7 +227,7 @@ function start(runtime) {
     if (!features.isOn(runtime.config, 'stickers')) return;
     if (classifyConfig(runtime.config).enabled === false) return;
     processQueue(runtime).catch(() => { /* 后台任务不许把进程带崩 */ });
-  }, 5000);
+  }, 15000);
   if (typeof timer.unref === 'function') timer.unref();
 }
 

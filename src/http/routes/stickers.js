@@ -320,6 +320,8 @@ module.exports = function register(router) {
           confidence: 1, tags: item.tags || [], description: item.description,
         });
         if (!moved) return json(res, 500, { ok: false, error: '移动文件失败' });
+        // 人工归档 = 已确认，之后不再出现在「收藏待定」
+        item.reviewed = true;
         idx.pending = (idx.pending || []).filter((x) => x !== sha);
         indexer.save(config, config.root, idx);
         return json(res, 200, { ok: true, category: label, file: item.file });

@@ -15,7 +15,7 @@ function makeRuntime(collectOverrides = {}) {
   const config = {
     root,
     features: { stickers: true },
-    sticker: { dir: 'data/stickers', collect: { enabled: true, maxPerDay: 30, maxFileBytes: 2 * 1024 * 1024, dhashDistance: 6, sameFormatOnly: true, minConfidence: 0.6, allowNewCategories: true, ...collectOverrides } },
+    sticker: { dir: 'data/stickers', collect: { enabled: true, maxPerDay: 30, maxFileBytes: 2 * 1024 * 1024, dhashDistance: 6, sameFormatOnly: true, minConfidence: 0.6, allowNewCategories: true, classifyDelaySec: 0, ...collectOverrides } },
     persona: { master: { wxids: [], names: ['主人'] } },
   };
   const runtime = { config, logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) }, store: null };
@@ -97,6 +97,29 @@ test('classify：高置信度归档到分类目录，队列清空', async () => 
   assert.match(idx.items[out.sha].file, /^开心\//);
   assert.ok(fs.existsSync(path.join(root, 'data/stickers', idx.items[out.sha].file)));
   assert.equal(collect.readQueue(runtime.config, root).length, 0);
+  // 自动归类之后仍然留在「待定」（还没人工确认），不会下一次点开就消失
+  const pending = collect.pendingList(runtime, 50);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].category, '开心');
+  assert.equal(pending[0].sha, out.sha);
+
+  // 人工归档后才从待定里消失
+  idx.items[out.sha].reviewed = true;
+  indexer.save(runtime.config, root, idx);
+  assert.equal(collect.pendingList(runtime, 50).length, 0);
+});
+
+test('classify：新收藏先等 classifyDelaySec 秒再分类（回复优先）', async () => {
+  const { root, runtime } = makeRuntime({ classifyDelaySec: 600 });
+  collect.collect(runtime, { image: png(21).toString('base64'), mime: 'image/png', dhash: '6666666666666666' });
+  let called = 0;
+  const stats = await classify.processQueue(runtime, {
+    describe: async () => { called += 1; return '猫'; },
+    llm: { isMock: false, complete: async () => { called += 1; return '{"category":"开心","confidence":0.9}'; } },
+  });
+  assert.equal(stats.deferred, 1);
+  assert.equal(called, 0, '延迟期内不许调用模型');
+  assert.equal(collect.readQueue(runtime.config, root).length, 1);
 });
 
 test('classify：置信度不够就留在待定（队列重试后丢弃任务）', async () => {
