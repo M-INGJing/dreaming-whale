@@ -140,6 +140,44 @@ class StickerCollect(unittest.TestCase):
         self.assertTrue(posts, '注入的 http 必须被用上')
 
 
+    def test_collect_async_fetches_original_gif_from_network(self):
+        # 微信本地缓存只有静态预览，原图要联网取；后台线程里取到 GIF 就按 GIF 提交
+        import emoji_vision
+
+        class Bare:
+            sticker_base = 'http://127.0.0.1:8787'
+            sticker_headers = {'x-bot-token': 't'}
+
+            class db:
+                @staticmethod
+                def get_nickname(wxid):
+                    return ''
+
+        posts = []
+
+        class Http:
+            def post(self, url, json=None, headers=None, timeout=None):
+                posts.append(json)
+                return type('R', (), {'status_code': 200, 'json': lambda self: {'ok': True}})()
+
+        original_load = emoji_vision.load_original
+        try:
+            emoji_vision.load_original = lambda *a, **k: gif_bytes()
+            collect_async(
+                Bare(), {'username': 'wxid_a', 'sender_username': 'wxid_a', 'content': '<emoji md5="' + 'a' * 32 + '"/>'},
+                png_bytes(True), http=Http(), account_dir='x', content='<emoji/>',
+            )
+            import time
+            for _ in range(80):
+                if posts:
+                    break
+                time.sleep(0.02)
+            self.assertTrue(posts)
+            self.assertEqual(posts[0]['mime'], 'image/gif')
+            self.assertEqual(base64.b64decode(posts[0]['image']), gif_bytes())
+        finally:
+            emoji_vision.load_original = original_load
+
     def test_submit_posts_mime_for_gif(self):
         captured = []
 

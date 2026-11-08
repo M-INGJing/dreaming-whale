@@ -61,11 +61,14 @@ def submit(post_json, raw, chat_type, chat_id, sender, log=None, mime='image/png
     return out
 
 
-def collect_async(runtime, msg, raw, log=None, http=None, mime='image/png'):
+def collect_async(runtime, msg, raw, log=None, http=None, mime='image/png', account_dir='', content=''):
     """从收到的 emoji 消息里异步收一张；任何异常都不允许影响收消息。
 
     http 由调用方注入（engine.LOCAL_HTTP 是模块级全局，不在 runtime 上；
     上一版在这里取 runtime.LOCAL_HTTP，结果每张都 AttributeError）。
+
+    原始动图常常只在 CDN 上：微信本地缓存里是静态预览图，所以要允许联网取原图。
+    这一步放在后台线程里做，收消息不等它。
     """
     try:
         if not raw:
@@ -91,16 +94,32 @@ def collect_async(runtime, msg, raw, log=None, http=None, mime='image/png'):
                     log('表情包收藏：没有可用的 HTTP 客户端，跳过')
                 return
 
+            send_raw, send_mime = raw, mime
+            if account_dir and content:
+                try:
+                    from emoji_vision import guess_mime, load_original
+                    original = load_original(account_dir, content, allow_network=True)
+                    if original:
+                        send_raw = original
+                        send_mime = guess_mime(original)
+                        if log:
+                            log('表情包收藏：取到原图（%s，%d 字节）' % (send_mime, len(original)))
+                    elif log:
+                        log('表情包收藏：没取到原图，存预览图（%s）' % send_mime)
+                except Exception as exc:  # noqa: BLE001
+                    if log:
+                        log('表情包收藏：取原图失败（%s），用预览图' % type(exc).__name__)
+
             def post_json(path, payload):
                 resp = client.post(
                     runtime.sticker_base + path,
                     json=payload,
                     headers=runtime.sticker_headers,
-                    timeout=15,
+                    timeout=20,
                 )
                 return resp.json() if getattr(resp, 'status_code', 0) == 200 else {}
 
-            submit(post_json, raw, chat_type, chat_id, sender, log=log, mime=mime)
+            submit(post_json, send_raw, chat_type, chat_id, sender, log=log, mime=send_mime)
         except Exception as exc:  # noqa: BLE001
             if log:
                 log('表情包收藏：后台提交异常 %r' % (exc,))
