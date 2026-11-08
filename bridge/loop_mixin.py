@@ -5,6 +5,31 @@ import engine as G
 
 class LoopMixin:
 
+    def bili_share_loop(self):
+        """B 站分享：每 30 秒问一次内核有没有要发的。
+
+        该不该发、发给谁（主人私聊 / 白名单群）全在内核判定；这里只负责
+        「取一条 → 领取 → 发送 → 回执」，发送失败也回执 failed，绝不自作主张重发。
+        """
+        import bili_outbox as share_transport
+        base = self.sticker_base
+        headers = self.sticker_headers
+
+        def get_json(path):
+            resp = G.LOCAL_HTTP.get(base + path, headers=headers, timeout=8)
+            return resp.json() if getattr(resp, 'status_code', 0) == 200 else {}
+
+        def post_json(path, payload):
+            resp = G.LOCAL_HTTP.post(base + path, json=payload, headers=headers, timeout=8)
+            return resp.json() if getattr(resp, 'status_code', 0) == 200 else {}
+
+        while True:
+            G.time.sleep(30)
+            try:
+                share_transport.watch_once(get_json, post_json, self.send_text, G.log)
+            except Exception as exc:  # noqa: BLE001 - 分享失败不许影响收发
+                G.log_throttled('bili-share-error', 'B 站分享循环异常：%r' % (exc,), ttl=300)
+
     def care_watch(self):
         """主动搭话：没事的时候她自己来问一句「在干啥 / 累不累」。
 

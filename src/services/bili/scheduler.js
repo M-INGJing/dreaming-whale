@@ -14,6 +14,8 @@ const quota = require('../../core/bili/quota');
 const biliStore = require('../../infra/biliStore');
 const feedService = require('./feed');
 const diaryService = require('./diary');
+const outbox = require('./outbox');
+const shareService = require('./share');
 const biliWatch = require('../biliWatch');
 
 const TICK_MS = 60 * 1000;
@@ -133,6 +135,32 @@ function createBiliScheduler(opts = {}) {
         watched.push({ candidate, digest });
       }
       const diary = await writeDiary({ config: cfg, llm: runtime && runtime.llm, logger, date: now, watched });
+      // 分享：分数够 + 配额够 + 时间间隔够，才入队；桥接会在 30 秒内取走发送。
+      let share = null;
+      try {
+        outbox.sweepStale(cfg);
+        const best = ranked[0];
+        const verdict = outbox.canShare(cfg, { score: best ? best.score : 0, now, silentDays: 0 });
+        if (verdict.ok && best) {
+          const composed = await shareService.composeShare({
+            llm: runtime && runtime.llm,
+            candidate: best.candidate,
+            digest: (watched[0] && watched[0].digest) || '',
+            chatType: verdict.target.chatType,
+            logger,
+          });
+          share = outbox.enqueue(cfg, {
+            bvid: best.candidate.bvid,
+            title: best.candidate.title,
+            text: composed.text,
+            target: verdict.target,
+          });
+        } else {
+          biliStore.appendEvent(cfg, { kind: 'share_skip', reason: verdict.reason });
+        }
+      } catch (err) {
+        logger?.warn?.('[bili] 分享入队失败：' + ((err && err.code) || 'unknown'));
+      }
       const reads = 1 + deep * 3;
       let qa = quota.noteRead(allow.state, reads, now);
       saveQuota(qa);
@@ -144,12 +172,12 @@ function createBiliScheduler(opts = {}) {
       })));
       biliStore.appendEvent(cfg, {
         kind: 'wake', source: feed.source, picked: ranked.length, watched: watched.map((w) => w.candidate.bvid),
-        ownerChars: diary.ownerChars, selfChars: diary.selfChars,
+        ownerChars: diary.ownerChars, selfChars: diary.selfChars, share: share && share.ok ? 'queued' : 'none',
       });
       return {
         ok: true, dry: false, source: feed.source,
         picked: ranked.map((row) => row.candidate.bvid), watched: watched.map((w) => w.candidate.bvid),
-        diary,
+        diary, share: share && share.ok ? { id: share.item.id, chatType: share.item.chatType } : null,
       };
     } finally {
       running = false;

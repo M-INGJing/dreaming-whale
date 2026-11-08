@@ -77,6 +77,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · B 站主动分享（P2）
+
+- `src/services/bili/outbox.js`：出站队列（pending → sending → sent/failed 两段式），一天最多 3 次、两次至少隔 2 小时、同一 BV 只分享一次；目标只允许主人私聊与 `bili.share.chats` 白名单群（每群独立日上限）；sending 超 10 分钟自动判失败，避免桥接崩了永远卡住。
+- `src/services/bili/share.js`：分享文案（私聊 ≤200 字、群 ≤60 字，都带视频链接）；有模型按人设写，失败用模板。
+- 调度器跑完日记后按分数/配额/间隔入队；内核新增 `GET /api/bili/pending`、`POST /api/bili/claim`、`POST /api/bili/ack`，状态接口追加今日分享次数。
+- 桥接新增 `bridge/bili_outbox.py` 传送带（取件→领取→发送→回执，失败也回执、绝不重发）与 `bili_share_loop` 线程（30 秒一轮）。
+- 新增 `tests/bili-p2.test.js`(11) 与 `tests/test_bili_outbox.py`(6)：配额/间隔/白名单/去重/两段式/超时清理/文案模板，全部离线。
+
 ### 新增 · B 站作息与两本日记（P1）
 
 - `src/core/bili/{clock,score,quota,diaryFormat}.js`：作息窗口（含跨午夜）、开摆概率、偏好打分（喜欢/踩雷/热度/新鲜/看过/超时长）、读写预算、日记按天分节与当天摘要。

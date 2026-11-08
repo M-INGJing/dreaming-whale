@@ -239,6 +239,7 @@ class BridgeRuntime(AccountMixin, WindowMixin, SenderMixin, StickerMixin, VoiceM
         G.threading.Thread(target=self.send_watchdog, daemon=True).start()
         G.threading.Thread(target=self.battery_watch, daemon=True).start()
         G.threading.Thread(target=self.care_watch, daemon=True).start()
+        G.threading.Thread(target=self.bili_share_loop, daemon=True, name='bili-share').start()
         G.threading.Thread(target=self.bridge_heartbeat, daemon=True).start()
         G.threading.Thread(target=self.listener_watch, daemon=True).start()
         G.threading.Thread(target=self.contacts_sync_once, daemon=True).start()

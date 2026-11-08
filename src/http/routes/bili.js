@@ -12,6 +12,7 @@ const { createBiliLogin } = require('../../services/biliLogin');
 const { createBiliScheduler } = require('../../services/bili/scheduler');
 const biliStore = require('../../infra/biliStore');
 const clock = require('../../core/bili/clock');
+const outbox = require('../../services/bili/outbox');
 const { json, readBody } = require('../util');
 
 const INSTANCES = new WeakMap();
@@ -49,6 +50,11 @@ module.exports = function register(router) {
         windows: clock.normalizeWindows(night.windows),
         nextWakeMinutes: clock.nextWindowIn(night.windows, now),
         diary: biliStore.diarySummary(runtime.config, now),
+        share: (() => {
+          const ledger = outbox.readLedger(runtime.config);
+          const today = outbox.dayKey(now);
+          return { dayCount: ledger.date === today ? ledger.dayCount : 0, lastAt: ledger.lastAt };
+        })(),
       });
     } catch (err) {
       runtime.logger.warn('[bili] status 失败 code=' + (err && err.code ? err.code : 'unknown'));
@@ -72,6 +78,30 @@ module.exports = function register(router) {
   router.get('/api/bili/diary', (runtime, req, res) => {
     const now = new Date();
     return json(res, 200, { ok: true, summary: biliStore.diarySummary(runtime.config, now) });
+  });
+
+  // ---- 桥接取分享（两段式：pending → claim → ack）----
+  router.get('/api/bili/pending', (runtime, req, res) => {
+    if (!features.isOn(runtime.config, 'bili')) return json(res, 200, { ok: true, item: null, reason: 'disabled' });
+    try { outbox.sweepStale(runtime.config); } catch { /* 清理失败不影响取件 */ }
+    return json(res, 200, { ok: true, item: outbox.nextPending(runtime.config) });
+  });
+
+  router.post('/api/bili/claim', async (runtime, req, res) => {
+    const body = await readBody(req).catch(() => ({}));
+    const id = String((body && body.id) || '').trim();
+    if (!id) return json(res, 400, { ok: false, error: '缺少 id' });
+    const item = outbox.claim(runtime.config, id);
+    return json(res, 200, { ok: Boolean(item), item, error: item ? '' : 'not_pending' });
+  });
+
+  router.post('/api/bili/ack', async (runtime, req, res) => {
+    const body = await readBody(req).catch(() => ({}));
+    const id = String((body && body.id) || '').trim();
+    if (!id) return json(res, 400, { ok: false, error: '缺少 id' });
+    const status = body.status === 'sent' ? 'sent' : 'failed';
+    const out = outbox.ack(runtime.config, id, status, String((body && body.error) || ''));
+    return json(res, 200, { ok: Boolean(out.ok), item: out.item || null, error: out.reason || '' });
   });
 
   router.post('/api/bili/login/qr', async (runtime, req, res) => {
