@@ -14,6 +14,14 @@ const { getByPath } = require('./objpath');
 
 const REGISTRY = [
   {
+    key: 'bili',
+    path: 'features.bili',
+    label: 'B 站养鱼（只读）',
+    desc: '默认关闭。开启后，主人发 B 站视频链接时会去读这个视频的页面信息、字幕和热评再回复；关掉 = 只按普通链接处理（不联网读视频）。只读，不会点赞/评论/私信。',
+    default: false,
+    experimental: true,
+  },
+  {
     key: 'stickers',
     path: 'features.stickers',
     label: '表情包（实验性）',

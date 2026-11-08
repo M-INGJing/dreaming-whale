@@ -768,9 +768,18 @@ function customMasterBlock({ isMaster, masterText, masterRoast }) {
 
 /** 「对方发的链接」那一段 */
 function linkBlock(linkText) {
+  const text = String(linkText == null ? '' : linkText);
+  // B 站视频是「读过页面信息/字幕/热评」的，不能再用「你没看完视频」那套说法。
+  if (text.startsWith('【B站视频】')) {
+    return [
+      '【对方发的链接：B 站视频】',
+      text.slice(0, 1200),
+      '你刚看过这个视频的页面信息、字幕和热评（没看画面）。回复时像真人一样接一句（吐槽、好奇、接梗都行），可以聊字幕里的内容，但别说自己看懂了画面；拿不准就问对方一句。',
+    ].join('\n');
+  }
   return [
     '【对方发的链接】',
-    String(linkText).slice(0, 1200),
+    text.slice(0, 1200),
     '你刚点开看了这些信息。回复时像真人一样接一句（吐槽、好奇、接梗都行），不要照念简介，也别假装看完了整个视频或文章；拿不准就问对方一句。',
   ].join('\n');
 }
@@ -1478,6 +1487,7 @@ module.exports = {
   buildPromptParts,
   buildSystem,
   buildLegacySystem,
+  linkBlock,
   mockReply,
   cleanIncomingForPersona,
   splitBubbles,

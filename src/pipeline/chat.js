@@ -23,6 +23,7 @@ const features = require('../infra/features');
 const { matchMaster, isVerifiedOwner } = require('../core/master');
 const links = require('../adapters/links');
 const searchService = require('../services/search');
+const biliWatch = require('../services/biliWatch');
 const { LlmError } = require('../llm/client');
 const { describeError } = require('../infra/errors');
 const { saveSettings } = require('../infra/config');
@@ -740,7 +741,19 @@ class Bot {
     // 群聊触发判定后再并行获取链接和搜索资料，避免无关消息消耗网络预算。
     const linkUrls = (this.config.links && this.config.links.enabled === false)
       ? [] : links.extractUrls(clean.text || '');
-    const linkTask = linkUrls.length ? this.readLink(linkUrls[0], key) : Promise.resolve('');
+    // B 站养鱼（只读）：开关打开且链接是 B 站视频时，优先读「页面信息+字幕+热评」，
+    // 读不到再退回普通链接阅读器。关掉开关 = 完全不碰这条分支。
+    const biliUrl = features.isOn(this.config, 'bili')
+      ? linkUrls.find((u) => biliWatch.isVideoUrl(u)) || '' : '';
+    const linkTask = biliUrl
+      ? biliWatch.readVideo(this.config, biliUrl, { logger: this.logger })
+        .then((text) => text || (linkUrls.length ? this.readLink(linkUrls[0], key) : ''))
+      : (linkUrls.length ? this.readLink(linkUrls[0], key) : Promise.resolve(''));
+    if (biliUrl) {
+      try {
+        this.store.appendEvent(key, { type: 'bili', detail: String(clean.text || '').slice(0, 60), status: 'read' });
+      } catch (err) { this.logger?.warn('[bili] stage=record_failed ' + describeError(err)); }
+    }
     const searchResult = await searchService.search({
       text: clean.text,
       history: () => this.recentHeard({ msg, key }).filter(line => line !== clean.text),

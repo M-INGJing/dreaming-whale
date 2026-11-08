@@ -209,6 +209,8 @@ const DEFAULT_CONFIG = {
   // 图片理解：默认智谱 GLM-4V-Flash（免费）
   features: {
     stickers: false,
+    // B 站养鱼（只读）：开着才会在主人发 B 站链接时去读视频页/字幕/热评
+    bili: false,
     // 系统提示词静态化（前缀缓存）：关掉 = 回到「每轮都塞时间/心情/说话人」的旧行为
     staticSystem: true,
     // 环境信息注入（系统 / 时区 / 所在地）：关掉 = system 里没有 <env> 块
