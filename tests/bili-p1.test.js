@@ -176,6 +176,17 @@ test('scheduler.runRound：真实跑一轮，读视频 + 写日记 + 记 wake �
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('scheduler：看过的视频下一轮不再被选中（state.seen 跨天保留）', async () => {
+  const { sched, root } = schedulerHarness();
+  await sched.runRound({ dry: false, now: at(12) });
+  const state = JSON.parse(fs.readFileSync(path.join(root, 'data', 'bili', 'state.json'), 'utf8'));
+  assert.deepEqual(state.seen, ['BV1xx411c7mD']);
+
+  const again = await sched.runRound({ dry: true, now: at(13) });
+  assert.deepEqual(again.picked, [], '同一条已经看过，不再推荐');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('scheduler.tick：开关关着时什么都不做', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bili-off-'));
   const calls = { feed: 0 };

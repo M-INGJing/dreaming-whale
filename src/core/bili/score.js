@@ -68,7 +68,7 @@ function rankCandidates(candidates, prefs, opts = {}) {
   const scored = (Array.isArray(candidates) ? candidates : [])
     .filter((c) => c && c.bvid)
     .map((c) => ({ candidate: c, ...scoreCandidate(c, prefs, { ...opts, now }) }))
-    .filter((row) => Number.isFinite(row.score));
+    .filter((row) => Number.isFinite(row.score) && row.score > W.seen);
   scored.sort((a, b) => (b.score - a.score) || ((Number(b.candidate.pubdate) || 0) - (Number(a.candidate.pubdate) || 0)));
   const limit = Math.max(1, Number(opts.limit) || 5);
   return scored.slice(0, limit);

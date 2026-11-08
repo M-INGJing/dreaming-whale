@@ -72,10 +72,11 @@ function createBiliScheduler(opts = {}) {
     const cfg = storeConfig();
     const raw = biliStore.readJson(biliStore.paths(cfg).state, {});
     const today = clock.dayKey(now);
-    if (raw.date !== today) return { date: today, wakes: 0, skipped: false, lastWakeAt: 0 };
+    const seen = Array.isArray(raw.seen) ? raw.seen.filter((x) => typeof x === 'string') : [];
+    if (raw.date !== today) return { date: today, wakes: 0, skipped: false, lastWakeAt: 0, seen };
     return {
       date: raw.date, wakes: Number(raw.wakes) || 0, skipped: Boolean(raw.skipped),
-      lastWakeAt: Number(raw.lastWakeAt) || 0,
+      lastWakeAt: Number(raw.lastWakeAt) || 0, seen,
     };
   }
 
@@ -132,10 +133,13 @@ function createBiliScheduler(opts = {}) {
         return { ok: false, reason: 'empty_feed', source: feed.source };
       }
       const maxVideos = Math.max(1, Math.min(20, Number(night.maxVideos) || 5));
+      const stateBefore = loadState(now);
       const ranked = score.rankCandidates(feed.items, prefs, {
         now: now.getTime(),
         limit: maxVideos,
         maxMinutes: Number(night.maxMinutes) || 45,
+        // 看过的（跨天记着，最多留 300 条）不再推荐，避免连着几轮都是同一条
+        seen: new Set(stateBefore.seen || []),
       });
       if (dry) {
         return {
@@ -196,7 +200,8 @@ function createBiliScheduler(opts = {}) {
       let qa = quota.noteRead(allow.state, reads, now);
       saveQuota(qa);
       const state = loadState(now);
-      const next = { ...state, wakes: state.wakes + 1, lastWakeAt: now.getTime() };
+      const seen = Array.from(new Set([...(state.seen || []), ...watched.map((w) => w.candidate.bvid)])).slice(-300);
+      const next = { ...state, wakes: state.wakes + 1, lastWakeAt: now.getTime(), seen };
       saveState(next);
       biliStore.appendFeedLog(cfg, now, ranked.map((row) => ({
         bvid: row.candidate.bvid, score: Math.round(row.score), reasons: row.reasons,
