@@ -77,6 +77,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · B 站扫码登录（P0.5）
+
+- `scripts/bili-login.js`：终端 ASCII 二维码 + `data/bili/qr.png`，轮询 180 秒，过期自动重生一次；成功后只把 cookie 写进 `data/bili/cookie.json`（原子写，日志不打印凭证）。
+- `src/adapters/bili/qr.js`：二维码矩阵/ASCII/PNG（`node:zlib` 手写 PNG，零第三方运行时依赖）、带响应头的 https 请求（扫码要从 `Set-Cookie` 取 SESSDATA）、cookie 字段筛选。
+- `src/adapters/bili/login.js`：passport 二维码 generate/poll 状态机（86101 未扫 / 86090 已扫 / 86038 过期 / 0 成功）。
+- vendor `qrcode-generator` 1.4.4（MIT，原样 vendored + SHA256 清单），`NOTICE.md` 与 `vendor/README.md` 增补。
+- 新增 `tests/bili-login.test.js`(10)：矩阵/ASCII/PNG 结构、cookie 过滤、轮询状态机与异常分支，全部离线。
+
 ### 新增 · B 站养鱼（P0 只读适配层）
 
 - 新增 `src/adapters/bili/`：WBI 签名、API 客户端（限速/重试/匿名密钥缓存）、视频元信息/字幕/热评归一化；未登录也能读公开视频，`-101` 不再当故障。

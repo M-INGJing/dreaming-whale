@@ -60,3 +60,32 @@ $lines = Get-ChildItem "$root\wechatauto" -Recurse -File |
    如果它 `raise`「unknown ... layout」，说明上游改了内部结构 —— 先看 diff 再决定补丁怎么改，
    **不许猜**。
 5. 断网全量构建一次（或用不可达的 `-Mirror` 验证不依赖索引），再真机发一条消息确认。
+
+---
+
+# vendored qrcode（上游 npm 包 qrcode-generator 1.4.4）
+
+这个目录是**上游单文件源码的原样副本**，不是本项目写的代码。
+
+## 上游与版本
+
+- 包名：`qrcode-generator`
+- 版本：`1.4.4`
+- 作者：Kazuhiko Arase（MIT）
+- 来源：npm（`https://registry.npmmirror.com/qrcode-generator/-/qrcode-generator-1.4.4.tgz`）
+- 落库日期：2026-11-08
+- 内容：`qrcode.js`（原样，含 MIT 头）、`package.json`、`README.md`、`LICENSE`（MIT 原文）
+
+## 为什么固定
+
+1. **零 npm 依赖**：项目刻意保持「不跑 npm install 也能起」，扫码登录只需要一个二维码渲染器，
+   把单文件库原样 vendored 进来，比在运行时引入依赖更可控。
+2. **可离线**：源码进 Git，断网也能生成二维码；不需要构建期联网拉包。
+3. **可审计**：MIT 许可证与版本固定在 `MANIFEST.sha256` 里，升级必须显式 diff。
+
+## 规矩
+
+- **不许手改** `vendor/qrcode/qrcode.js`。需要换行为时在 `src/adapters/bili/qr.js` 里包一层。
+- 升级：换 `qrcode.js` + `package.json` + `README.md` + `LICENSE`，重新生成 `MANIFEST.sha256`，
+  并跑 `node tests/bili-login.test.js`（矩阵/PNG/ASCII 都覆盖）。
+

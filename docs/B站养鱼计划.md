@@ -1,6 +1,6 @@
 # 鲸鲸养鱼计划：把「刷 B 站 / 看视频 / 写日记」接进 whale_girl
 
-> 状态：**P0 已完成（适配层 + 聊天接入），扫码登录与作息/日记待做**。参考项目：[`dsh-bili-whale`](https://github.com/Alterssss/dsh-bili-whale) 0.4.6（已 clone 到 `D:\workspace\whale\dsh-bili-whale`）。
+> 状态：**P0（适配层 + 聊天接入）与 P0.5（扫码登录）已完成，作息/日记待做**。参考项目：[`dsh-bili-whale`](https://github.com/Alterssss/dsh-bili-whale) 0.4.6（已 clone 到 `D:\workspace\whale\dsh-bili-whale`）。
 > 已完成（2026-11-08）：
 > - `src/adapters/bili/wbi.js` WBI 签名（官方测试向量 `ea1db124…` 对齐）
 > - `src/adapters/bili/api.js` 客户端（cookie/Referer、全局限速、nav 密钥 10 分钟缓存、网络重试、`code!=0` 统一错误；未登录 `-101` 也能拿匿名签名密钥）
@@ -10,7 +10,8 @@
 > - `src/infra/biliCookie.js` cookie 读写（只落 `data/bili/`、写 `.tmp` 再 rename、权限 600 尽力而为、永不打印）
 > - `scripts/bili.js`：`view <BV|链接> [--json]`、`whoami`
 > - `tests/bili-wbi.test.js`(7) + `tests/bili-api.test.js`(12) + `tests/bili-watch.test.js`(10) 全离线通过；实网用 `BV1GJ411x7h7` 验证过（213 字摘要、无字幕降级、热评 2 条）
-> 下一步：P0.5 扫码登录（QR）→ P1 作息与日记。
+> - **P0.5 扫码登录**：`scripts/bili-login.js` + `src/adapters/bili/{qr,login}.js` + vendor `qrcode-generator` 1.4.4（MIT）；`tests/bili-login.test.js`(10)；实网验证过二维码生成（`data/bili/qr.png`）
+> 下一步：P1 作息与日记。
 > 本文只描述「怎么做、分几步、每步验收什么」，不含实现细节代码。
 
 ---

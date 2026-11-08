@@ -38,6 +38,7 @@
 | 组件 | 位置 | 许可证 / 说明 |
 | --- | --- | --- |
 | wechatauto-replica 1.2.9 | `vendor/wechatauto/` | Apache-2.0；许可证原文见 `vendor/wechatauto/dist-info/licenses/LICENSE` |
+| qrcode-generator 1.4.4 | `vendor/qrcode/` | MIT（Copyright (c) 2009 Kazuhiko Arase）；许可证原文见 `vendor/qrcode/LICENSE`，仅用于 B 站扫码登录的二维码渲染 |
 | wxauto | 上游项目 | Apache-2.0；`wechatauto-replica` 的 4.x 复刻来源 |
 | VB-CABLE | 安装包内的官方安装程序 | VB-Audio Donationware；按官方条款使用 |
 | Noto Sans SC | `website/fonts/` | SIL Open Font License 1.1；许可证见该目录 |
