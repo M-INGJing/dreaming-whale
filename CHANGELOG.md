@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 启动器「B 站」页（扫码登录）
+
+- 启动器新增「B 站」页：只读开关、扫码登录（显示内核生成的二维码图片、每 2 秒轮询）、退出登录、登录状态与开关状态提示。
+- 内核新增 `/api/bili/status|login/qr|login/poll|logout`：二维码由内核生成并返回 base64 PNG，cookie 不出内核也不进界面；轮询走 `biliLogin` 状态机（同一时间只挂一个二维码）。
+- 二维码登录状态机单测 `tests/bili-login-service.test.js`(8)：idle/等待/已扫/成功写 cookie/过期清理/状态缓存 TTL/登出删文件，全部离线。
+- 按 AGENTS 重发了启动器：`dotnet publish -p:PublishSingleFile=true -p:SelfContained=false`，产物已就绪为根目录 `WhaleLauncher.new.exe`（旧 EXE 被运行中的启动器占用，替换需先关闭启动器）。
+
 ### 新增 · B 站扫码登录（P0.5）
 
 - `scripts/bili-login.js`：终端 ASCII 二维码 + `data/bili/qr.png`，轮询 180 秒，过期自动重生一次；成功后只把 cookie 写进 `data/bili/cookie.json`（原子写，日志不打印凭证）。
