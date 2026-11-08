@@ -209,6 +209,9 @@ const DEFAULT_CONFIG = {
   // B 站养鱼（只读）：总闸是 features.bili，这里是作息/偏好/预算/日记的默认值。
   // 默认全部按「刚创的小号也扛得住」给保守值；关掉开关就不拉 feed、不写日记、不分享。
   bili: {
+    // 扫码登录成功后内核对自动写这里（config.json 已被 gitignore）；手填也可以。
+    // 优先级高于 data/bili/cookie.json，换机/清 data 不用重扫。
+    cookie: '',
     preferences: {
       like: ['AI 工具与插件', '猫咪', '鬼畜与怀旧剪辑', '动画/模型'],
       dislike: ['带货', '擦边', '标题党', '纯搬运'],

@@ -417,9 +417,10 @@ public sealed class BiliPage : UserControl, IRefreshable
         enabled.IsChecked = on;
         var cookie = res.Prop("cookie");
         var present = cookie.ValueKind == JsonValueKind.Object && cookie.TryGetProperty("present", out var p) && p.ValueKind == JsonValueKind.True;
+        var source = cookie.ValueKind == JsonValueKind.Object && cookie.TryGetProperty("source", out var sr) && sr.ValueKind == JsonValueKind.String ? sr.GetString() ?? "" : "";
         var loggedIn = res.Bool("loggedIn");
         if (!present) loginState.Text = "未登录。点「扫码登录」，用手机 B 站 App 扫码确认。";
-        else if (loggedIn) loginState.Text = "已登录（cookie 有效）。";
+        else if (loggedIn) loginState.Text = "已登录（cookie 有效，来源：" + (source == "config" ? "config.json（重启/换机不用重扫）" : "data/bili/cookie.json") + "）。";
         else loginState.Text = "已保存 cookie，但 B 站未确认登录（可能过期了）。重新扫一次即可。";
         var pending = res.Prop("pending");
         if (pending.ValueKind == JsonValueKind.Object && pending.TryGetProperty("issuedAt", out var issued))

@@ -29,6 +29,7 @@ const SECRET_PATHS = new Set([
   'voice.apiKey',
   'gateway.wechat.inboundToken',
   'gateway.douyin.inboundToken',
+  'bili.cookie',
 ]);
 
 function isPlainObject(v) {
@@ -145,6 +146,39 @@ function reloadRuntimeConfig(runtime) {
   const personaStore = require('../persona/store');
   personaStore.apply(next, personaStore.load(next));
   return mergeConfigInPlace(runtime.config, next);
+}
+
+/**
+ * 清掉一个「密钥类」字段（退出登录用：把 bili.cookie 从 config.json 里删掉）。
+ * 设置接口对空串的处理是「不改」，所以这里不能走 applyConfigPatch。
+ */
+function clearSecret(runtime, dotted) {
+  if (!SECRET_PATHS.has(dotted)) throw new Error('只能清密钥类字段：' + dotted);
+  const file = runtime.config.paths.configFile;
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')) || {};
+  } catch {
+    return false;
+  }
+  const parts = String(dotted).split('.').filter(Boolean);
+  let cur = raw;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    cur = cur && cur[parts[i]];
+    if (!isPlainObject(cur)) return false;
+  }
+  if (!isPlainObject(cur)) return false;
+  delete cur[parts[parts.length - 1]];
+  fs.writeFileSync(file, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+  reloadRuntimeConfig(runtime);
+  // 有些字段（例如 bili.cookie）在默认配置里是空串，重载后可能又变成默认值；这里显式清一次。
+  const parts2 = String(dotted).split('.').filter(Boolean);
+  if (parts2.length >= 2) {
+    let cur2 = runtime.config;
+    for (let i = 0; i < parts2.length - 1; i += 1) cur2 = cur2 && cur2[parts2[i]];
+    if (isPlainObject(cur2)) cur2[parts2[parts2.length - 1]] = '';
+  }
+  return true;
 }
 
 /**
@@ -355,6 +389,7 @@ module.exports = {
   clearSettingsShadow,
   mergeConfigInPlace,
   applyConfigPatch,
+  clearSecret,
   saveConfigPatch,
   defaultOf,
   resetConfig,

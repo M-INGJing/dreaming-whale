@@ -13,7 +13,7 @@
 const path = require('node:path');
 const { createClient } = require('../adapters/bili/api');
 const endpoints = require('../adapters/bili/endpoints');
-const { readCookie } = require('../infra/biliCookie');
+const { readCookieFor } = require('../infra/biliCookie');
 const { resolveUrl: resolveShortUrl } = require('./bili/resolve');
 
 const MARK = '【B站视频】';
@@ -112,7 +112,7 @@ async function readVideo(config, url, deps = {}) {
   try {
     const root = deps.root
       || (config && config.paths && config.paths.dataDir ? path.resolve(config.paths.dataDir, '..') : process.cwd());
-    const cookie = deps.cookie != null ? deps.cookie : readCookie(root).cookie;
+    const cookie = deps.cookie != null ? deps.cookie : readCookieFor(config).cookie;
     const client = deps.client || createClient({ cookie, timeoutMs: TIMEOUT_MS, retry: 0 });
     const readMaterials = deps.watchMaterials || endpoints.watchMaterials;
     const materials = await readMaterials(client, bvid);
@@ -137,7 +137,7 @@ async function readMaterials(config, url, deps = {}) {
   try {
     const root = deps.root
       || (config && config.paths && config.paths.dataDir ? path.resolve(config.paths.dataDir, '..') : process.cwd());
-    const cookie = deps.cookie != null ? deps.cookie : readCookie(root).cookie;
+    const cookie = deps.cookie != null ? deps.cookie : readCookieFor(config).cookie;
     const client = deps.client || createClient({ cookie, timeoutMs: TIMEOUT_MS, retry: 0 });
     const readMaterialsFn = deps.watchMaterials || endpoints.watchMaterials;
     const materials = await readMaterialsFn(client, bvid);

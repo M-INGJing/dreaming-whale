@@ -16,7 +16,7 @@ function createBiliLogin(opts = {}) {
   const generate = opts.generate || login.generate;
   const poll = opts.poll || login.poll;
   const renderPng = opts.renderPng || qr.png;
-  const readCookie = opts.readCookie || cookieStore.readCookie;
+  const readCookie = opts.readCookie || cookieStore.readCookieFor;
   const writeCookie = opts.writeCookie || cookieStore.writeCookie;
   const logger = opts.logger || null;
   const now = opts.now || (() => Date.now());
@@ -47,7 +47,8 @@ function createBiliLogin(opts = {}) {
       const saved = writeCookie(rootOf(config), out.cookie);
       pending = null;
       statusCache = { at: 0, value: null };
-      return { state: 'ok', saved: Boolean(saved && saved.hasCookie) };
+      // cookie 一并回给路由层，由它写进 config.json（只在内核内部流转，不回 HTTP 响应）
+      return { state: 'ok', saved: Boolean(saved && saved.hasCookie), cookie: out.cookie };
     }
     if (out.state === 'expired' || out.state === 'error') pending = null;
     return { state: out.state, code: out.code || 0, message: out.message || '' };
@@ -58,8 +59,7 @@ function createBiliLogin(opts = {}) {
   }
 
   async function status(config) {
-    const root = rootOf(config);
-    const info = readCookie(root);
+    const info = readCookie(config);
     let live = { loggedIn: false, wbiReady: false, nameLength: 0 };
     if (info.hasCookie) {
       if (!statusCache.value || now() - statusCache.at > TTL) {
@@ -75,7 +75,7 @@ function createBiliLogin(opts = {}) {
       live = statusCache.value || live;
     }
     return {
-      cookie: { present: info.hasCookie, updatedAt: info.updatedAt },
+      cookie: { present: info.hasCookie, updatedAt: info.updatedAt, source: info.source || 'file' },
       loggedIn: Boolean(live.loggedIn),
       wbiReady: Boolean(live.wbiReady),
       pending: pending ? { issuedAt: pending.at } : null,

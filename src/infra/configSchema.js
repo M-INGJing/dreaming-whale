@@ -61,6 +61,7 @@ const FIELDS = {
   'sticker.ensureSend': { type: 'bool' },
 
   // ---- B 站养鱼（只读）----
+  'bili.cookie': { type: 'string', maxLen: 4000 },
   'bili.night.skipChance': { type: 'float', min: 0, max: 1 },
   'bili.night.maxVideos': { type: 'int', min: 1, max: 20 },
   'bili.night.maxWakesPerDay': { type: 'int', min: 1, max: 10 },

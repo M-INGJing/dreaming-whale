@@ -13,6 +13,7 @@ const { createBiliScheduler } = require('../../services/bili/scheduler');
 const biliStore = require('../../infra/biliStore');
 const clock = require('../../core/bili/clock');
 const outbox = require('../../services/bili/outbox');
+const { applyConfigPatch, clearSecret } = require('../../infra/configPatch');
 const { json, readBody } = require('../util');
 
 const INSTANCES = new WeakMap();
@@ -36,6 +37,15 @@ function schedulerFor(runtime) {
 module.exports = function register(router) {
   router.get('/api/bili/status', async (runtime, req, res) => {
     try {
+      // 一次性迁移：老版本把 cookie 只存在 data/bili/cookie.json，这里顺手写进 config.json，
+      // 之后换机/清 data 也不用重扫（失败不影响状态读取）。
+      if (!(runtime.config.bili && runtime.config.bili.cookie)) {
+        try {
+          const fileCookie = require('../../infra/biliCookie').readCookie(
+            require('node:path').resolve(runtime.config.paths.dataDir, '..'));
+          if (fileCookie.hasCookie) applyConfigPatch(runtime, { 'bili.cookie': fileCookie.cookie });
+        } catch { /* 迁移失败不挡状态 */ }
+      }
       const out = await forRuntime(runtime).status(runtime.config);
       const now = new Date();
       const state = schedulerFor(runtime).loadState(now);
@@ -153,7 +163,17 @@ module.exports = function register(router) {
     try {
       const out = await forRuntime(runtime).pollOnce(runtime.config);
       if (out.state === 'idle') return json(res, 409, { ok: false, state: 'idle', error: '还没有二维码，请先点「扫码登录」' });
-      return json(res, 200, { ok: true, ...out });
+      if (out.state === 'ok') {
+        // 扫码成功后把 cookie 也写进 config.json：换机/清 data 不用重扫。
+        // 接口永远不回 cookie 本体；config 接口里 bili.cookie 走 SECRET_PATHS 脱敏。
+        try {
+          applyConfigPatch(runtime, { 'bili.cookie': out.cookie });
+        } catch (err) {
+          runtime.logger.warn('[bili] cookie 写入 config.json 失败 code=' + (err && err.code ? err.code : 'config'));
+        }
+        return json(res, 200, { ok: true, state: 'ok', saved: Boolean(out.saved), persisted: true });
+      }
+      return json(res, 200, { ok: true, state: out.state, code: out.code || 0, message: out.message || '' });
     } catch (err) {
       runtime.logger.warn('[bili] 轮询失败 code=' + (err && err.code ? err.code : 'unknown'));
       return json(res, 502, { ok: false, state: 'error', error: '轮询登录状态失败（网络异常）' });
@@ -162,6 +182,12 @@ module.exports = function register(router) {
 
   router.post('/api/bili/logout', (runtime, req, res) => {
     forRuntime(runtime).logout(runtime.config);
+    // 退出登录要连 config.json 里那份一起清掉，否则下次启动又被当成已登录
+    try {
+      clearSecret(runtime, 'bili.cookie');
+    } catch (err) {
+      runtime.logger.warn('[bili] 清除 config 里的 cookie 失败 code=' + (err && err.code ? err.code : 'config'));
+    }
     return json(res, 200, { ok: true, removed: true });
   });
 };

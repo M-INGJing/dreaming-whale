@@ -77,6 +77,15 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · B 站 cookie 持久化到 config.json（不用每次扫码）
+
+- cookie 读取优先级：`config.bili.cookie` → `data/bili/cookie.json`；扫码成功后内核同时写 config.json，换机/清 `data/` 也不用重扫。
+- 老用户首次打开状态页会自动把 `data/bili/cookie.json` 迁移进 config.json（只迁移一次）。
+- 退出登录会同时清掉文件与 config 里的 cookie（`clearSecret`，因为设置接口对空串的理解是「不改」）。
+- `bili.cookie` 纳入密钥脱敏：`/api/config` 只回「配没配」，不回 cookie 本体。
+- 启动器登录状态显示 cookie 来源（config.json / data 文件）。
+- 新增 `tests/bili-cookie-config.test.js`(5)：优先级、脱敏、写入/清除、登录成功回传 cookie。
+
 ### 改进 · B 站收尾（抖动/沉默衰减/短链/日记上限）与启动器页补齐
 
 - 作息：进窗口后按「日期 + 窗口」的固定抖动推迟（`bili.night.jitterMinutes`，默认 20 分钟），不再天天同一分钟开跑。

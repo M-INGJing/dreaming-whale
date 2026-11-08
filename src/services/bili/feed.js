@@ -8,7 +8,7 @@
 
 const path = require('node:path');
 const { createClient } = require('../../adapters/bili/api');
-const { readCookie } = require('../../infra/biliCookie');
+const { readCookieFor } = require('../../infra/biliCookie');
 
 const RCMD_PATH = '/x/web-interface/wbi/index/top/feed/rcmd';
 const POPULAR_PATH = '/x/web-interface/popular';
@@ -52,7 +52,7 @@ function pickList(body, kind) {
 async function fetchFeed(config, deps = {}) {
   const root = config && config.paths && config.paths.dataDir
     ? path.resolve(config.paths.dataDir, '..') : process.cwd();
-  const cookie = deps.cookie != null ? deps.cookie : readCookie(root).cookie;
+  const cookie = deps.cookie != null ? deps.cookie : readCookieFor(config).cookie;
   const client = deps.client || createClient({ cookie, timeoutMs: 8000, retry: 1 });
   const limit = Math.max(1, Math.min(50, Number(deps.limit) || 20));
   const logger = deps.logger || null;

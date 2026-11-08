@@ -6,13 +6,26 @@ const path = require('node:path');
 /**
  * B 站 cookie 的读取（只在需要登录的接口用；公开视频不读也能看）。
  *
+ * 来源优先级：
+ *  1) config.bili.cookie —— 主人手填/扫码后落进 config.json，换机/清 data 也不丢；
+ *  2) data/bili/cookie.json —— 扫码登录的默认落点（data/ 已被 .gitignore 排除）。
+ *
  * 安全约定：
- *  - 只从 data/bili/cookie.json 读（data/ 已被 .gitignore 排除）；
- *  - 返回值只用于请求头，**不写日志、不进错误信息、不回接口**；
+ *  - 返回值只用于请求头，**不写日志、不进错误信息、不回接口**（config 接口会脱敏）；
  *  - 文件缺失/损坏一律返回空串，让调用方按「未登录」降级，不抛异常打断聊天。
  */
 
 const DEFAULT_REL = 'data/bili/cookie.json';
+
+function cookieFromConfig(config) {
+  return String((config && config.bili && config.bili.cookie) || '').trim();
+}
+
+/** config 里那份 cookie（不再读盘）；没有就是空。 */
+function readConfigCookie(config) {
+  const cookie = cookieFromConfig(config);
+  return { cookie, hasCookie: Boolean(cookie), updatedAt: 0, source: cookie ? 'config' : '' };
+}
 
 function cookiePath(root, rel = DEFAULT_REL) {
   const base = path.resolve(root || process.cwd());
@@ -51,4 +64,16 @@ function writeCookie(root, cookie, rel = DEFAULT_REL) {
   return { file, hasCookie: Boolean(cookie) };
 }
 
-module.exports = { DEFAULT_REL, cookiePath, readCookie, writeCookie };
+module.exports = { DEFAULT_REL, cookiePath, readCookie, readConfigCookie, readCookieFor, writeCookie };
+
+/**
+ * 统一入口：先看 config.bili.cookie，再看 data/bili/cookie.json。
+ * @param {object} config runtime config
+ */
+function readCookieFor(config) {
+  const fromConfig = readConfigCookie(config);
+  if (fromConfig.hasCookie) return fromConfig;
+  const root = config && config.paths && config.paths.dataDir
+    ? path.resolve(config.paths.dataDir, '..') : process.cwd();
+  return readCookie(root);
+}
