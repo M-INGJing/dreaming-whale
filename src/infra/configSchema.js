@@ -78,6 +78,7 @@ const FIELDS = {
   'bili.risk.writeGapSec': { type: 'int', min: 0, max: 3600 },
   'bili.diary.enabled': { type: 'bool' },
   'bili.diary.digestTokens': { type: 'int', min: 50, max: 2000 },
+  'bili.style.enabled': { type: 'bool' },
   'bili.write.enabled': { type: 'bool' },
 
   // ---- 记忆（旧键，运行时只读 constants.js）----

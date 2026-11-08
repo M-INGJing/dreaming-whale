@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · B 站日记问答与评论区说话方式（P2.5）
+
+- 问「你今天看了啥 / 日记 / 刷了什么」时，把**当天日记摘要**（≤200 token）注入最后一轮；普通聊天不注入，`features.bili` 关掉整块为空。
+- 看视频时顺带学**评论区的说话方式**：从热评里抽「气口」短句（≤20 字，最多 20 条、30 天不出现就衰减），聊天里最多注入 3 条并明确写「偶尔用、别堆砌」；只学表达方式，不存原文、不学立场、不改人设。
+- 新增 `src/core/bili/style.js`、`src/services/bili/{style,digest,chat}.js`；调度器改用 `readMaterials` 同时拿摘要与热评；`biliWatch` 增加 `readMaterials`。
+- 新增 `tests/bili-p25.test.js`(8)：日记问句识别、开关/空内容不注入、短语清洗与合并去重/上限/衰减、注入格式、规则学「气口」、chat 块组合、readMaterials 结构。
+
 ### 新增 · B 站主动分享（P2）
 
 - `src/services/bili/outbox.js`：出站队列（pending → sending → sent/failed 两段式），一天最多 3 次、两次至少隔 2 小时、同一 BV 只分享一次；目标只允许主人私聊与 `bili.share.chats` 白名单群（每群独立日上限）；sending 超 10 分钟自动判失败，避免桥接崩了永远卡住。

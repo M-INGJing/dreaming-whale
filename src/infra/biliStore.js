@@ -31,6 +31,7 @@ function paths(config) {
     events: path.join(dir, 'events.jsonl'),
     diaryOwner: path.join(dir, 'diary', 'owner.md'),
     diarySelf: path.join(dir, 'diary', 'self.md'),
+    style: path.join(dir, 'style.json'),
     feedDir: path.join(dir, 'feed'),
   };
 }

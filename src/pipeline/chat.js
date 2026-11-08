@@ -24,6 +24,7 @@ const { matchMaster, isVerifiedOwner } = require('../core/master');
 const links = require('../adapters/links');
 const searchService = require('../services/search');
 const biliWatch = require('../services/biliWatch');
+const biliChat = require('../services/bili/chat');
 const { LlmError } = require('../llm/client');
 const { describeError } = require('../infra/errors');
 const { saveSettings } = require('../infra/config');
@@ -939,8 +940,14 @@ class Bot {
     const system = promptParts.system;
     // 桥接状态接在本轮状态最后一行；旧行为路径（tail 为空）也照样带上
     const tail = [promptParts.tail, turnState.bridgeLine].filter(Boolean).join('\n');
-    // 记忆块 = 人物卡/事件/摘要 + 关系卡（关系卡是 main 新加的，两段都挂最后一条 user 消息）
-    const memoryBlock = [mem.block, mem.relationsBlock].filter(Boolean).join('\n\n');
+    // 记忆块 = 人物卡/事件/摘要 + 关系卡 + B 站块（日记摘要 / 评论区说话习惯，都可为空）
+    let biliBlock = '';
+    try {
+      biliBlock = biliChat.blocks(this.config, clean.text, new Date(nowMs));
+    } catch (err) {
+      this.logger?.warn('[bili] 注入失败 ' + describeError(err));
+    }
+    const memoryBlock = [mem.block, mem.relationsBlock, biliBlock].filter(Boolean).join('\n\n');
     const turns = this.buildTurns({ ...msg, ts: nowMs }, historyForTurns, memoryBlock, tail);
 
     // 预算：system 只测量，不裁剪；dialogueBudget 默认 5,500，给裁剪窗口用。

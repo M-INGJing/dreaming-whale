@@ -16,6 +16,7 @@ const feedService = require('./feed');
 const diaryService = require('./diary');
 const outbox = require('./outbox');
 const shareService = require('./share');
+const styleService = require('./style');
 const biliWatch = require('../biliWatch');
 
 const TICK_MS = 60 * 1000;
@@ -59,6 +60,12 @@ function createBiliScheduler(opts = {}) {
   const rng = opts.rng || Math.random;
   const fetchFeed = opts.fetchFeed || feedService.fetchFeed;
   const readVideo = opts.readVideo || ((config, url, deps) => biliWatch.readVideo(config, url, deps));
+  // 读一次拿「摘要 + 结构化热评」：摘要进日记，热评进「评论说话方式」学习。
+  // 只注入 readVideo（老测试/老调用方）时，包一层：没有热评就不学风格。
+  const readMaterials = opts.readMaterials
+    || (opts.readVideo
+      ? (async (config, url, deps) => ({ digest: await opts.readVideo(config, url, deps), replies: [] }))
+      : ((config, url, deps) => biliWatch.readMaterials(config, url, deps)));
   const writeDiary = opts.writeDiary || diaryService.writeRound;
 
   let timer = null;
@@ -151,15 +158,30 @@ function createBiliScheduler(opts = {}) {
       }
       const deep = Math.min(2, ranked.length);
       const watched = [];
+      const repliesPool = [];
       for (let i = 0; i < deep; i += 1) {
         const candidate = ranked[i].candidate;
         let digest = '';
         try {
-          digest = await readVideo(cfg, candidate.bvid, { logger });
+          const materials = await readMaterials(cfg, candidate.bvid, { logger });
+          digest = (materials && materials.digest) || '';
+          for (const row of (materials && materials.replies) || []) repliesPool.push(row);
         } catch (err) {
           logger?.warn?.('[bili] 读视频失败 code=' + (err && err.code ? err.code : 'unknown'));
         }
         watched.push({ candidate, digest });
+      }
+      // 评论区说话方式：只学「气口」，存短语、衰减与上限在 core/bili/style.js
+      let styleLearn = null;
+      try {
+        const biliCfg = biliConfig(cfg);
+        if (!biliCfg.style || biliCfg.style.enabled !== false) {
+          styleLearn = await styleService.learn({
+            config: cfg, llm: runtime && runtime.llm, replies: repliesPool.slice(0, 12), logger, now,
+          });
+        }
+      } catch (err) {
+        logger?.warn?.('[bili] 评论风格学习失败：' + ((err && err.code) || 'unknown'));
       }
       const diary = await writeDiary({ config: cfg, llm: runtime && runtime.llm, logger, date: now, watched });
       // 分享：分数够 + 配额够 + 时间间隔够，才入队；桥接会在 30 秒内取走发送。

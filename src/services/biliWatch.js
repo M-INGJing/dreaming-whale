@@ -100,4 +100,30 @@ async function readVideo(config, url, deps = {}) {
   }
 }
 
-module.exports = { MARK, DIGEST_MAX, SUBTITLE_EXCERPT, isVideoUrl, buildDigest, readVideo, fmtCount, fmtDuration };
+/**
+ * 和 readVideo 一样读一次，但把结构化的热评也返回（评论区的说话方式要从这里学）。
+ * @returns {Promise<{digest:string, info:object|null, replies:object[]}>}
+ */
+async function readMaterials(config, url, deps = {}) {
+  const bvid = endpoints.parseBvid(url);
+  if (!bvid) return { digest: '', info: null, replies: [] };
+  try {
+    const root = deps.root
+      || (config && config.paths && config.paths.dataDir ? path.resolve(config.paths.dataDir, '..') : process.cwd());
+    const cookie = deps.cookie != null ? deps.cookie : readCookie(root).cookie;
+    const client = deps.client || createClient({ cookie, timeoutMs: TIMEOUT_MS, retry: 0 });
+    const readMaterialsFn = deps.watchMaterials || endpoints.watchMaterials;
+    const materials = await readMaterialsFn(client, bvid);
+    if (!materials || !materials.info || !materials.info.bvid) return { digest: '', info: null, replies: [] };
+    return {
+      digest: buildDigest(materials),
+      info: materials.info,
+      replies: Array.isArray(materials.replies) ? materials.replies : [],
+    };
+  } catch (err) {
+    deps.logger?.warn?.('[bili] 读取视频失败 code=' + (err && err.code ? err.code : 'unknown'));
+    return { digest: '', info: null, replies: [] };
+  }
+}
+
+module.exports = { MARK, DIGEST_MAX, SUBTITLE_EXCERPT, isVideoUrl, buildDigest, readVideo, readMaterials, fmtCount, fmtDuration };
