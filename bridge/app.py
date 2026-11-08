@@ -240,6 +240,12 @@ class BridgeRuntime(AccountMixin, WindowMixin, SenderMixin, StickerMixin, VoiceM
         G.threading.Thread(target=self.battery_watch, daemon=True).start()
         G.threading.Thread(target=self.care_watch, daemon=True).start()
         G.threading.Thread(target=self.bili_share_loop, daemon=True, name='bili-share').start()
+        # 收藏模块自检：加载失败/代码旧版会让「收到表情包没收藏」很难查，启动时先亮一行
+        try:
+            import sticker_collect  # noqa: F401 - 只要确认能 import
+            G.log('表情包收藏：已加载（收到的表情包会自动收藏到「待定」）')
+        except Exception as _exc:  # noqa: BLE001
+            G.log('表情包收藏：加载失败 %s（这条桥接不会收藏表情包，请更新 bridge 目录后重启）' % type(_exc).__name__)
         G.threading.Thread(target=self.bridge_heartbeat, daemon=True).start()
         G.threading.Thread(target=self.listener_watch, daemon=True).start()
         G.threading.Thread(target=self.contacts_sync_once, daemon=True).start()
