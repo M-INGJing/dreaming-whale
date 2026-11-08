@@ -197,12 +197,15 @@ public sealed class BiliPage : UserControl, IRefreshable
 
     async Task StartQrAsync()
     {
+        Log("点扫码登录：NodeRunning=" + _sup.NodeRunning + " url=" + _sup.Url);
         if (!_sup.NodeRunning) { await Dialog("内核没在运行，先启动内核。"); return; }
         qrButton.IsEnabled = false;
         qrButton.Content = "生成中…";
         try
         {
             var res = await Api.Post(_sup.Url, "/api/bili/login/qr", "{}");
+            Log("QR 响应：HTTP=" + res.StatusCode + " ok=" + res.Ok + " raw=" + (res.Raw ?? "").Length
+                + " err=" + res.Error + " pngLen=" + res.Str("png").Length);
             if (!res.Ok)
             {
                 await Dialog("生成二维码失败：" + (res.Error.Length > 0 ? res.Error : Api.Detail(res)));
@@ -211,16 +214,32 @@ public sealed class BiliPage : UserControl, IRefreshable
             var b64 = res.Str("png");
             if (b64.Length == 0) { await Dialog("内核没返回二维码图片。"); return; }
             qrImage.Source = Decode(b64);
+            // 图片控件自己也必须是 Visible：之前只把外层 qrBox 打开，Image 仍是 Collapsed，
+            // 表现就是「日志说显示成功、界面一片空白」。
+            qrImage.Visibility = Visibility.Visible;
             qrBox.Visibility = Visibility.Visible;
             qrHint.Text = "用手机 B 站 App 扫码，并在手机上点确认（180 秒内有效）。";
             qrHint.Visibility = Visibility.Visible;
             timer.Start();
+            await Dispatcher.Yield(DispatcherPriority.Loaded);
+            Log("二维码已显示：source=" + (qrImage.Source != null) + " imgVis=" + qrImage.Visibility
+                + " boxVis=" + qrBox.Visibility + " imgSize=" + qrImage.ActualWidth + "x" + qrImage.ActualHeight);
+        }
+        catch (Exception ex)
+        {
+            Log("显示二维码异常：" + ex.GetType().Name + ": " + ex.Message);
+            await Dialog("显示二维码失败：" + ex.Message);
         }
         finally
         {
             qrButton.IsEnabled = true;
             qrButton.Content = "扫码登录";
         }
+    }
+
+    void Log(string text)
+    {
+        try { _sup.Say("[bili] " + text); } catch { /* 诊断不许影响界面 */ }
     }
 
     async Task PollAsync()
