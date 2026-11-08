@@ -40,6 +40,8 @@ module.exports = function register(router) {
   router.post('/api/bili/login/qr', async (runtime, req, res) => {
     try {
       const out = await forRuntime(runtime).start(runtime.config);
+      const ua = String((req && req.headers && req.headers['user-agent']) || 'none').split('/')[0].slice(0, 24);
+      runtime.logger.info('[bili] 二维码已生成（base64 ' + String(out.png || '').length + ' 字符，ua=' + ua + '）');
       return json(res, 200, { ok: true, ...out });
     } catch (err) {
       runtime.logger.warn('[bili] 生成二维码失败 code=' + (err && err.code ? err.code : 'unknown'));
