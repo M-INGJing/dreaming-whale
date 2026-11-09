@@ -111,17 +111,26 @@ function parseModelOutput(raw) {
  */
 async function writeRound(opts = {}) {
   const { config, llm, logger, date = new Date(), watched = [], chatDigest = '' } = opts;
+  const source = opts.source === 'chat' ? 'chat' : 'watch';
   const cfg = (config && config.bili && config.bili.diary) || {};
-  if (cfg.enabled === false) return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, skipped: 'disabled' };
+  if (cfg.enabled === false) return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'disabled' };
   const state = loadState(config, date);
   const seen = new Set(state.written);
   const fresh = (watched || []).filter((w) => w && w.candidate && !seen.has(w.candidate.bvid));
+  const hasChat = Boolean(String(chatDigest || '').trim());
   if (!fresh.length) {
-    return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, skipped: 'no_new_video' };
+    // 聊天触发的更新：没有新视频也可以把「今天聊到的」写进去，但要和上次更新隔开
+    if (source !== 'chat' || !hasChat) {
+      return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'no_new_video' };
+    }
+    const gap = Math.max(0, Number(cfg.chatMinGapMinutes) || 0);
+    if (gap && state.updatedAt && Date.now() - state.updatedAt < gap * 60000) {
+      return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'chat_cooldown' };
+    }
   }
   const maxRewrites = Math.max(0, Number(cfg.maxRewritesPerDay) || 0);
   if (maxRewrites && state.rewrites >= maxRewrites) {
-    return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, skipped: 'rewrite_cap' };
+    return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'rewrite_cap' };
   }
 
   const diaries = biliStore.readDiaries(config);
@@ -137,7 +146,7 @@ async function writeRound(opts = {}) {
     const material = [
       '日期：' + state.date + '，现在 ' + clockOf(date),
       previousOwner ? '今天已经写过的内容（草稿，请重写成一篇完整的）：\n' + previousOwner.slice(0, 1500) : '今天还没写过。',
-      '这一轮新看的：\n' + materialsText(fresh),
+      fresh.length ? '这一轮新看的：\n' + materialsText(fresh) : '这一轮没有新视频：主要是聊天，请把聊天里的感想写进去。',
       titleLine(titles),
       chatDigest ? '今天聊到的事（素材：只当背景，不要逐条复述、不要引用原话）：\n' + chatDigest : '',
       previousSelf ? '今天给自己的日记已经写过：' + previousSelf.slice(0, 400) : '',
@@ -173,6 +182,7 @@ async function writeRound(opts = {}) {
     selfChars: selfFile ? self.length : 0,
     usedModel,
     rewritten: true,
+    source,
     newCount: fresh.length,
   };
 }

@@ -208,6 +208,15 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
   } catch (err) {
     logger.warn('B 站分享补记失败（不影响聊天）：' + describeError(err));
   }
+  // 聊天后「闲时写日记」：回复优先，掷中后等连续几分钟没聊天再写
+  try {
+    const { createDiaryIdle } = require('./services/bili/diaryIdle');
+    runtime.diaryIdle = createDiaryIdle({ runtime, logger: child('bili') });
+    runtime.diaryIdle.start();
+    runtime.bot.afterChat = () => runtime.diaryIdle.noteActivity();
+  } catch (err) {
+    logger.warn('日记闲时更新启动失败（不影响聊天）：' + describeError(err));
+  }
   watchConfigFile(runtime);
   // 探针：createRuntime 结束 = server.js 可以 listen 的时刻，这条就是「启动被堵了多久」
   probe.emit(logger, 'info', `createRuntime 耗时=${probe.ms(probe.now() - probeT0)}ms（listen 之前）`);

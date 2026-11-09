@@ -77,6 +77,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 聊天后按概率、闲时更新当天日记
+
+- 每聊完一轮，按 `bili.diary.chatChance`（默认 0.15）掷一次「等会儿更新日记」；回复优先，掷中只排队、不立刻写。
+- 连续 `chatIdleSeconds`（默认 180 秒）没有新聊天才动笔；和上次日记更新至少隔 `chatMinGapMinutes`（默认 90 分钟）。
+- 聊天触发的更新允许「没有新视频」：用当天聊天素材重写当天那一篇（`source=chat`），仍受 `maxRewritesPerDay` 与字数上限约束。
+- 新增 `src/services/bili/diaryIdle.js`；聊天管线落库后调用 `afterChat` 钩子，app 启动时挂上并每 30 秒检查一次。
+- 新增 `tests/bili-diary-idle.test.js`(4) 与日记重写测试 2 条（chat-only 重写、冷却跳过）。
+
 ### 修复 · 私聊/群聊字数上限设 10 却不生效
 
 - 原因一：启动器把它夹到 40/20（`Math.Clamp(pv, 40, 800)`、`Math.Clamp(gv, 20, 300)`），服务端 `applyPersonaPatch` 又夹了一次，所以 config 实际是 40/20，提示词也按 40/20 写。

@@ -124,6 +124,38 @@ test('writeRound：没有模型时模板也会提一句聊天', async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('writeRound(chat)：没有新视频也能因为聊天重写当天', async () => {
+  const { config, root } = tmpConfig({ chatMinGapMinutes: 0 });
+  await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const seen = [];
+  const llm = {
+    isMock: false,
+    complete: async ({ turns }) => { seen.push(turns[0].content); return '{"owner":"今天看了猫，也和小明聊到加班，感觉大家都挺累的。","self":"聊天比视频更有意思。"}'; },
+  };
+  const out = await diary.writeRound({
+    config, llm, date: day, watched: [], chatDigest: '【私聊】小明：今天加班到十点', source: 'chat',
+  });
+  assert.equal(out.rewritten, true);
+  assert.equal(out.source, 'chat');
+  assert.match(seen[0], /没有新视频/);
+  assert.match(seen[0], /小明/);
+  const owner = fs.readFileSync(biliStore.paths(config).diaryOwner, 'utf8');
+  assert.match(owner, /小明/);
+  assert.equal(diaryFormat.countDays(owner), 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('writeRound(chat)：距上次更新太近时跳过（chatMinGapMinutes）', async () => {
+  const { config, root } = tmpConfig({ chatMinGapMinutes: 90 });
+  await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const out = await diary.writeRound({
+    config, llm: null, date: day, watched: [], chatDigest: '【私聊】小明：今天加班', source: 'chat',
+  });
+  assert.equal(out.rewritten, false);
+  assert.equal(out.skipped, 'chat_cooldown');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('scheduler：跑一轮时把当天聊天素材一起交给日记', async () => {
   const { createBiliScheduler } = require('../src/services/bili/scheduler');
   const { root } = tmpConfig();

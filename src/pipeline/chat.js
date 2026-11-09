@@ -1748,6 +1748,12 @@ class Bot {
     } catch (err) {
       this.logger && this.logger.error('写入回复失败（照常发送）：' + describeError(err));
     }
+    // 聊天后钩子：只记「可能晚点更新日记」，真正写要等闲下来（回复优先）
+    try {
+      if (typeof this.afterChat === 'function') this.afterChat({ key: decision.key, chatType: msg.chatType });
+    } catch (err) {
+      this.logger && this.logger.warn('[diary] 聊天后钩子失败：' + describeError(err));
+    }
     // 每轮一个 checkpoint：重启后能知道停在哪、episode 有没有关
     try {
       this.store.checkpoint(decision.key);
