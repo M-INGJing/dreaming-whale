@@ -54,6 +54,40 @@ function countToday(config, now = new Date()) {
   return readActions(config).filter((row) => row && Number(row.at) >= start).length;
 }
 
+function countTodayFor(config, id, now = new Date()) {
+  const start = todayStart(now);
+  return readActions(config).filter((row) => row && row.id === id && Number(row.at) >= start).length;
+}
+
+function lastActionFor(config, id) {
+  const items = readActions(config);
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    if (items[i] && items[i].id === id) return items[i];
+  }
+  return null;
+}
+
+/** 单个能力的配置：{ enabled?:bool, maxPerDay?:number } */
+function itemConfig(config, id) {
+  const items = capsConfig(config).items;
+  return items && typeof items === 'object' && items[id] && typeof items[id] === 'object' ? items[id] : {};
+}
+
+function itemEnabled(config, entry) {
+  if (capsConfig(config).enabled === false) return false;
+  if (itemConfig(config, entry.id).enabled === false) return false;
+  try { return entry.enabled(config) !== false; } catch { return false; }
+}
+
+function itemMaxPerDay(config, id) {
+  const value = itemConfig(config, id).maxPerDay;
+  if (value !== undefined && value !== null && Number.isFinite(Number(value))) {
+    return Math.max(0, Number(value));
+  }
+  const global = capsConfig(config).maxPerDay;
+  return Math.max(0, Number.isFinite(Number(global)) && global !== undefined ? Number(global) : DEFAULT_MAX_PER_DAY);
+}
+
 function recentToday(config, now = new Date(), limit = 3) {
   const start = todayStart(now);
   return readActions(config)
@@ -121,12 +155,32 @@ function entryById(id) {
   return REGISTRY.find((entry) => entry.id === id) || null;
 }
 
-/** 当前开关下可用的能力 */
-function list(config) {
+/**
+ * 能力列表：UI 需要看全部（包括「B 站功能没开」的灰项），提示词只用 enabled 的。
+ * @returns {{id,label,desc,available:boolean,enabled:boolean,maxPerDay:number,today:number,last:object|null}[]}
+ */
+function list(config, now = new Date()) {
+  return REGISTRY.map((entry) => {
+    let available = false;
+    try { available = entry.enabled(config) !== false; } catch { available = false; }
+    const enabled = available && capsConfig(config).enabled !== false && itemConfig(config, entry.id).enabled !== false;
+    return {
+      id: entry.id,
+      label: entry.label,
+      desc: entry.desc,
+      available,
+      enabled,
+      maxPerDay: itemMaxPerDay(config, entry.id),
+      today: countTodayFor(config, entry.id, now),
+      last: lastActionFor(config, entry.id),
+    };
+  });
+}
+
+/** 提示词里只列真正能用的能力。 */
+function promptItems(config) {
   if (capsConfig(config).enabled === false) return [];
-  return REGISTRY.filter((entry) => {
-    try { return entry.enabled(config) !== false; } catch { return false; }
-  }).map((entry) => ({ id: entry.id, label: entry.label, desc: entry.desc }));
+  return REGISTRY.filter((entry) => itemEnabled(config, entry)).map((entry) => ({ id: entry.id, label: entry.label, desc: entry.desc }));
 }
 
 function detect(text) {
@@ -151,7 +205,7 @@ function strip(text) {
 
 /** 提示词里的「你会自己做的事」；没有可用能力时返回空串。 */
 function block(config) {
-  const items = list(config);
+  const items = promptItems(config);
   if (!items.length) return '';
   const lines = ['【你会自己做的事（不是每轮都做）】'];
   for (const item of items) lines.push('- ' + item.label + '：' + item.desc);
@@ -180,13 +234,13 @@ function recentBlock(config, now = new Date()) {
  */
 async function run(runtime, ids, ctx = {}) {
   if (capsConfig(runtime.config).enabled === false) return [];
-  const allowed = list(runtime.config).map((x) => x.id);
-  const maxPerDay = Math.max(0, Number(capsConfig(runtime.config).maxPerDay) || DEFAULT_MAX_PER_DAY);
+  const allowed = promptItems(runtime.config).map((x) => x.id);
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
   const results = [];
   for (const id of ids) {
     if (!allowed.includes(id)) { results.push({ id, ok: false, summary: '这个能力现在不可用' }); continue; }
-    if (maxPerDay && countToday(runtime.config, now) >= maxPerDay) {
+    const maxPerDay = itemMaxPerDay(runtime.config, id);
+    if (maxPerDay && countTodayFor(runtime.config, id, now) >= maxPerDay) {
       results.push({ id, ok: false, summary: '今天做太多次了，先歇会儿' });
       continue;
     }
@@ -207,6 +261,7 @@ async function run(runtime, ids, ctx = {}) {
 }
 
 module.exports = {
-  REGISTRY, MARK_RE, capsConfig, actionsFile, readActions, countToday, recentToday,
-  list, detect, strip, block, recentBlock, run, record,
+  REGISTRY, MARK_RE, capsConfig, actionsFile, readActions, countToday, countTodayFor,
+  lastActionFor, itemConfig, itemEnabled, itemMaxPerDay, list, promptItems,
+  detect, strip, block, recentBlock, run, record,
 };

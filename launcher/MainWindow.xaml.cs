@@ -61,6 +61,7 @@ namespace WhaleLauncher
             foreach (var k in NavKeys) Nav.Items.Add(k);
             Nav.Items.Insert(3, new NavEntry { Key = "语音发送", Label = "语音发送", Icon = Geometry.Parse("M9 3h6v12H9z M5 10v3a7 7 0 0 0 14 0v-3 M12 20v3 M8 23h8") });
             Nav.Items.Insert(4, new NavEntry { Key = "B 站", Label = "B 站", Icon = Geometry.Parse("M3 7h18v12H3z M8 7l-2-3 M16 7l2-3 M10 11l5 2.5-5 2.5z") });
+            Nav.Items.Insert(5, new NavEntry { Key = "能力", Label = "能力", Icon = Geometry.Parse("M13 2 4 14h6l-1 8 9-12h-6z") });
             Nav.SelectedIndex = 0;
 
             _sup.Say("启动器就绪 · " + dir);
@@ -559,6 +560,7 @@ namespace WhaleLauncher
                 case "表情包": return new StickerPage(_sup);
                 case "语音发送": return new VoiceSendPage(_sup);
                 case "B 站": return new BiliPage(_sup);
+                case "能力": return new CapabilitiesPage(_sup);
                 case "主动与提醒": return new ReminderPage(_sup);
                 case "微信桥接": return new BridgePage(_sup);
                 case "诊断": return new DiagPage(_sup);

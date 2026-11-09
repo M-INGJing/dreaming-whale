@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 启动器「能力」页（一项能力一个子菜单）
+
+- 启动器新增「能力」页：左侧能力子菜单（逛 B 站 / 写今天的日记…，由内核列表自动生成），右侧说明、启用开关、每日上限（空=跟随全局）、今日次数、最近一次、「现在执行一次」。
+- 内核新增 `GET /api/capabilities`、`POST /api/capabilities/set`、`POST /api/capabilities/run`；每个能力支持单独的开关与每日上限（`capabilities.items.<id>`），全局开关/额度是 `capabilities.enabled/maxPerDay`。
+- 新增 `docs/能力扩展规范.md`，并在 `AGENTS.md` 第 5 节写明：新能力只加 `capabilities.js` 的 `REGISTRY`，提示词、聊天触发、启动器子菜单、配额与动作记录自动生效；禁止为单个能力改聊天管线或另写页面。
+- 新增能力时必须同步：注册表、测试、文档现有能力表、CHANGELOG。
+
 ### 新增 · 鲸鲸的能力清单：自己决定逛 B 站 / 写日记
 
 - 新增 `src/services/capabilities.js`：能力注册表（`id/label/desc/enabled/run`）+ 提示词块 + 动作记录；当前能力：`bili.watch`（逛 B 站，只看看/写日记，不主动分享）、`bili.diary.write`（用当天聊天素材写当天日记）。

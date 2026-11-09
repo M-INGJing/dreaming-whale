@@ -19,6 +19,7 @@ const modules = [
   require('./budget'),
   require('./memory'),
   require('./bili'),
+  require('./capabilities'),
 ];
 
 /** 组装路由表：每个领域一个文件，server 只负责启动。 */

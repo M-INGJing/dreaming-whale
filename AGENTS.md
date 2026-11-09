@@ -48,3 +48,9 @@ Copy-Item launcher/publish/WhaleLauncher.exe .\WhaleLauncher.exe -Force
 - 不直接 push `main`：改分支 → PR → CI 绿了再合并。
 - 提交信息按 `docs/协作规范.md`（新增 / 改进 / 修复 / 其他 四段）。
 - 用户可见行为变了，`CHANGELOG.md` 补一段。
+
+## 5. 能力扩展（逛 B 站 / 写日记 / 以后新增的）
+
+- 鲸鲸的「能力」统一走 `src/services/capabilities.js` 的 `REGISTRY`，聊天里由她用 `[[cap:<id>]]` 自主触发；**不要**为单个能力改聊天管线或另写启动器页面。
+- 新增能力必须同时更新：注册表、测试、`docs/能力扩展规范.md` 的现有能力表、`CHANGELOG.md`；启动器「能力」页会自动长出子菜单。
+- 详细规则见 `docs/能力扩展规范.md`，改动前先读它。
