@@ -81,8 +81,8 @@
 
 - 原因一：启动器把它夹到 40/20（`Math.Clamp(pv, 40, 800)`、`Math.Clamp(gv, 20, 300)`），服务端 `applyPersonaPatch` 又夹了一次，所以 config 实际是 40/20，提示词也按 40/20 写。
 - 原因二：字数上限只是提示词里的「最多约 N 字」，模型超了没有发送前兜底；认真讨论还会切到 `discussionMaxChars`（默认 600）。
-- 修复：三处下限统一降到 4（启动器、服务端、configSchema）；新增 `persona.clipToLimit()` 在发送/落库前硬截断（优先在标点处截，不超过上限）；超长会记一行日志。
-- 本机 `chat.privateMaxChars/groupMaxChars` 已改为 10；新增 `tests/persona-limit.test.js`(3)。
+- 修复：三处下限统一降到 4（启动器、服务端、configSchema），设置 10 就是 10；本机 `chat.privateMaxChars/groupMaxChars` 已改为 10。
+- 按用户要求**不做硬截断**：字数上限仍然只是提示词约束，模型偶尔超出属正常，不切话。新增 `tests/persona-limit.test.js`。
 
 ### 修复 · 语音回复里带颜文字/emoji 导致念出来很怪
 

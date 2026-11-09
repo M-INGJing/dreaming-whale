@@ -1729,20 +1729,13 @@ class Bot {
     // 记一笔全局回复时间（跨会话共用），_decide 的全局闸门读它
     this.globalReplyTimes.push(this.now().getTime());
     if (this.globalReplyTimes.length > 600) this.globalReplyTimes = this.globalReplyTimes.slice(-300);
-    // 字数上限是硬约束：提示词只是「约 N 字」，模型超了要在发送前截掉，否则设置形同虚设。
+    // 字数上限只作为提示词约束（写在「本轮状态」里）；不在这里硬截断，
+    // 因为截断会把语气/收尾切坏，而且设置页的本意是「让她说话短一点」，不是「切到 N 字」。
     const isGroup = msg.chatType === 'group';
     const maxChars = msg.discussion
       ? Math.min(Number(this.config.chat.discussionMaxChars) || LIMITS.maxOutputDiscussion, LIMITS.maxOutputDiscussion)
       : Math.min(Number(isGroup ? this.config.chat.groupMaxChars : this.config.chat.privateMaxChars)
         || LIMITS.maxOutputNormal, LIMITS.maxOutputNormal);
-    if (decision.action === 'reply') {
-      const clipped = persona.clipToLimit(text, maxChars);
-      if (clipped !== text) {
-        this.logger && this.logger.info(`回复超过字数上限（${text.length} > ${maxChars}），已截断`);
-        text = clipped;
-        decision.finalText = text;
-      }
-    }
     // 写库失败照常返回 bubbles：话已经生成了，不能因为落库失败把回复丢了
     try {
       this.store.appendMessage(decision.key, {
