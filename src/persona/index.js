@@ -1385,41 +1385,24 @@ function splitBubbles(text, { maxChars = 120, maxBubbles = 2 } = {}) {
   if (!raw) return [];
   const limit = Math.max(8, Number(maxChars) || 120);
   const maxN = Math.max(1, Number(maxBubbles) || 1);
-  // 按内容长度决定真的拆几条：短回复别硬拆，长回复也别碎成一句一条。
-  const bubbles = Math.max(1, Math.min(maxN, Math.ceil(raw.length / Math.max(24, limit * 0.9))));
-  if (raw.length <= limit) return [raw];
+  // 字数上限只是提示词约束：这里**绝不截断**，只按句子拆成最多 maxN 条。
+  // 以前 maxChars 很小时（比如 10）会走「单条 + 硬切 + …」，看起来就像她说话被砍断。
+  if (raw.length <= limit || maxN <= 1) return [raw];
 
   const sentences = raw.match(/[^。！？!?～~…\n]+[。！？!?～~…\n]*/g) || [raw];
   const parts = sentences.map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return [raw];
 
-  if (bubbles === 1) {
-    return [raw.length > limit ? raw.slice(0, Math.max(1, limit - 1)).trimEnd() + '…' : raw];
+  // 尽量按句子均匀分成 maxN 段，但保证一个字都不丢。
+  const groups = [];
+  let rest = parts.slice();
+  while (rest.length && groups.length < maxN - 1) {
+    const need = Math.ceil(rest.length / (maxN - groups.length));
+    groups.push(rest.slice(0, need).join(''));
+    rest = rest.slice(need);
   }
-
-  const perBubble = Math.ceil(Math.min(raw.length, limit * bubbles) / bubbles);
-  const out = [];
-  let cur = '';
-  for (const p of parts) {
-    if (!cur) {
-      cur = p;
-    } else if ((cur + p).length <= perBubble || out.length === bubbles - 1) {
-      cur += p;
-    } else {
-      out.push(cur);
-      cur = p;
-    }
-    if (out.length === bubbles - 1 && cur.length > perBubble * 1.5) {
-      // 留最后一条装下剩余，避免超过气泡数
-      break;
-    }
-  }
-  if (cur) out.push(cur);
-  // 硬截断每个气泡
-  const clipped = out.slice(0, bubbles).map((b, i) => {
-    const hard = Math.max(1, Math.ceil(Math.min(raw.length, limit * bubbles) / bubbles) + 8);
-    return b.length > hard ? b.slice(0, hard - 1).trimEnd() + '…' : b;
-  });
-  return clipped;
+  if (rest.length) groups.push(rest.join(''));
+  return groups.filter(Boolean);
 }
 
 /** 词库里的词条名（给群聊风格统计用） */

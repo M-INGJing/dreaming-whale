@@ -77,6 +77,12 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 消息「被截断」（小字数上限时 splitBubbles 硬切）
+
+- 原因：`splitBubbles` 在 `maxChars` 很小（如设置的 10 字）且只允许 1 条气泡时，会走 `slice(0, limit-1)+'…'` 的硬切路径；所以回复看起来像说到一半被砍断。
+- 修复：字数上限只做提示词约束，`splitBubbles` **不再截断**：短句原样返回；超长时只按句号拆成最多 `maxBubbles` 条，保证一个字都不丢（`maxBubbles=1` 时完整返回）。
+- 测试：`tests/persona.test.js` 的 splitBubbles 用例改为断言「拆分后拼起来等于原文」。
+
 ### 修复 · 让她「去刷视频」时只嘴上说、实际没执行
 
 - 原因：提示词里只写了 `[[cap:能力名]]` 却没给 id，模型容易写中文/占位符；识别只接受 ASCII id，于是标记对不上、能力没执行，她却在回复里编「刷到了做菜的」。

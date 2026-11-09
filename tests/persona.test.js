@@ -146,15 +146,15 @@ test('演示台词：命中意图、不会为空、群聊更短', () => {
   }
 });
 
-test('splitBubbles：短句一条，长句按句号拆，数量受限', () => {
+test('splitBubbles：短句一条，长句按句号拆，数量受限但不丢字', () => {
   assert.deepEqual(persona.splitBubbles('咕噜~', { maxChars: 50, maxBubbles: 2 }), ['咕噜~']);
   const long = '第一句话。第二句话！第三句话？第四句话。第五句话。';
   const bubbles = persona.splitBubbles(long, { maxChars: 12, maxBubbles: 2 });
   assert.ok(bubbles.length >= 1 && bubbles.length <= 2);
-  assert.ok(bubbles.join('').length > 0);
+  assert.equal(bubbles.join(''), long, '拆气泡不能丢字');
   const one = persona.splitBubbles(long, { maxChars: 12, maxBubbles: 1 });
   assert.equal(one.length, 1);
-  assert.ok(one[0].length <= 20);
+  assert.equal(one[0], long, 'maxBubbles=1 时也完整返回，不截断');
 });
 
 test('主人设定：Master 被当成唯一的主人/家人', () => {
