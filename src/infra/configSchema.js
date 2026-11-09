@@ -96,6 +96,9 @@ const FIELDS = {
   'bili.diary.maxEntriesPerDay': { type: 'int', min: 1, max: 50 },
   'bili.diary.maxRewritesPerDay': { type: 'int', min: 0, max: 50 },
   'bili.style.enabled': { type: 'bool' },
+  'bili.weekly.enabled': { type: 'bool' },
+  'bili.weekly.weekday': { type: 'int', min: 0, max: 6 },
+  'bili.weekly.hour': { type: 'int', min: 0, max: 23 },
   'bili.write.enabled': { type: 'bool' },
 
   // ---- 记忆（旧键，运行时只读 constants.js）----

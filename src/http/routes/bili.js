@@ -81,6 +81,10 @@ module.exports = function register(router) {
           const data = biliStore.readJson(biliStore.paths(runtime.config).style, {});
           return { items: Array.isArray(data.items) ? data.items.length : 0, updatedAt: Number(data.updatedAt) || 0 };
         })(),
+        weekly: (() => {
+          const w = require('../../services/bili/weekly').readWeekly(runtime.config);
+          return { weekStart: w.weekStart, generatedAt: w.generatedAt, chars: w.summary.length };
+        })(),
         share: (() => {
           const ledger = outbox.readLedger(runtime.config);
           const today = outbox.dayKey(now);
@@ -124,6 +128,19 @@ module.exports = function register(router) {
     const days = Number(new URL(req.url, 'http://x').searchParams.get('days') || 60);
     const view = require('../../services/bili/diaryView').listDays(runtime.config, { days });
     return json(res, 200, { ok: true, summary: biliStore.diarySummary(runtime.config, now), days: view.days });
+  });
+
+  // 每周小结：默认周日 22 点后自动跑；这里可以手动触发一次（测试/补跑）。
+  router.post('/api/bili/weekly/run', async (runtime, req, res) => {
+    try {
+      const body = await readBody(req).catch(() => ({}));
+      const out = await require('../../services/bili/weekly').maybeUpdate(runtime, {
+        force: Boolean(body && body.force), now: new Date(),
+      });
+      return json(res, 200, { ok: Boolean(out.ok), ...out });
+    } catch (err) {
+      return json(res, 500, { ok: false, error: '每周小结失败（模型或文件异常）' });
+    }
   });
 
   // ---- 桥接取分享（两段式：pending → claim → ack）----

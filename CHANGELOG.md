@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 每周日根据这一周的日记更新「我最近的状态」
+
+- 新增 `src/services/bili/weekly.js`：每周日 22:00 后（本地时间）把最近 7 天的两本日记压成一份小总结 `{summary, likes, dislikes, state}`，存 `data/bili/diary/weekly.json`；一周只跑一次，失败/无日记不打扰。
+- 聊天里作为「底色」注入一小段（≤240 字，14 天过期）：自然带出最近喜欢/不想碰的东西，要求别每句都提、别念小结。
+- 也可手动补跑：`POST /api/bili/weekly/run {"force":true}`；配置 `bili.weekly.{enabled,weekday,hour}`（默认周日 22 点）；`/api/bili/status` 增加 weekly 信息。
+- 新增 `tests/bili-weekly.test.js`(7)：周起点、7 天汇总、只周日跑一次、force 补跑、注入与过期、调度器 tick 触发。
+
 ### 改进 · 日记不再只有视频，也写今天聊天的感想
 
 - 新增 `src/services/bili/chatDigest.js`：从记忆里取当天各会话的消息，按会话压成短句素材（每会话最多 6 句、总量 1200 字），只用于提示词，不进日志。

@@ -18,6 +18,7 @@ const outbox = require('./outbox');
 const shareService = require('./share');
 const styleService = require('./style');
 const chatDigestService = require('./chatDigest');
+const weeklyService = require('./weekly');
 const biliWatch = require('../biliWatch');
 
 const TICK_MS = 60 * 1000;
@@ -298,16 +299,24 @@ function createBiliScheduler(opts = {}) {
     if (running) return { ok: false, reason: 'busy' };
     let d;
     try { d = decision(now); } catch (err) { return { ok: false, reason: 'decision_error' }; }
+    // 每周日更新「我最近的状态/口味」：它自己有时间闸（周日 + hour + 本周未更新），
+    // 和醒不醒无关；失败只记日志，不影响这一轮。
+    let weekly = null;
+    try {
+      weekly = await weeklyService.maybeUpdate(runtime, { now });
+    } catch (err) {
+      logger?.warn?.('[bili] 每周小结异常：' + ((err && err.code) || 'unknown'));
+    }
     if (!d.wake) {
       if (d.skipped && d.state && !d.state.skipped) {
         const next = { ...d.state, skipped: true };
         saveState(next);
         biliStore.appendEvent(storeConfig(), { kind: 'skip', reason: d.reason });
       }
-      return { ok: true, woke: false, reason: d.reason };
+      return { ok: true, woke: false, reason: d.reason, weekly };
     }
     const out = await runRound({ dry: false, now });
-    return { ok: out.ok, woke: out.ok, reason: out.reason || '', result: out };
+    return { ok: out.ok, woke: out.ok, reason: out.reason || '', result: out, weekly };
   }
 
   function start() {

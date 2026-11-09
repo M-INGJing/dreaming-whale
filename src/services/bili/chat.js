@@ -11,6 +11,7 @@
 const features = require('../../infra/features');
 const digest = require('./digest');
 const style = require('./style');
+const weekly = require('./weekly');
 
 function blocks(config, text, now = new Date()) {
   if (!features.isOn(config, 'bili')) return '';
@@ -20,10 +21,14 @@ function blocks(config, text, now = new Date()) {
     if (d) parts.push(d);
   } catch { /* 日记读不出来不影响回复 */ }
   try {
+    const w = weekly.blockFor(config, now);
+    if (w) parts.push(w);
+  } catch { /* 周小结读不出来不影响回复 */ }
+  try {
     const s = style.blockFor(config, now);
     if (s) parts.push(s);
   } catch { /* 风格读不出来不影响回复 */ }
   return parts.join('\n\n');
 }
 
-module.exports = { blocks, digest, style };
+module.exports = { blocks, digest, style, weekly };
