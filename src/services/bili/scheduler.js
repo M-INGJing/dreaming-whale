@@ -17,6 +17,7 @@ const diaryService = require('./diary');
 const outbox = require('./outbox');
 const shareService = require('./share');
 const styleService = require('./style');
+const chatDigestService = require('./chatDigest');
 const biliWatch = require('../biliWatch');
 
 const TICK_MS = 60 * 1000;
@@ -215,7 +216,16 @@ function createBiliScheduler(opts = {}) {
       } catch (err) {
         logger?.warn?.('[bili] 标题缓存写入失败：' + ((err && err.code) || 'io'));
       }
-      const diary = await writeDiary({ config: cfg, llm: runtime && runtime.llm, logger, date: now, watched });
+      // 日记不只写视频：把今天聊过的事也带上（只当背景，不让模型复述记录）
+      let chatText = '';
+      try {
+        chatText = chatDigestService.collectDay(runtime, now).text;
+      } catch (err) {
+        logger?.warn?.('[bili] 聊天素材收集失败：' + ((err && err.code) || 'unknown'));
+      }
+      const diary = await writeDiary({
+        config: cfg, llm: runtime && runtime.llm, logger, date: now, watched, chatDigest: chatText,
+      });
       if (diary && diary.skipped) {
         biliStore.appendEvent(cfg, { kind: 'diary_skipped', reason: diary.skipped });
       }

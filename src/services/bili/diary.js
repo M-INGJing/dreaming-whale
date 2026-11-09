@@ -20,11 +20,12 @@ const SYSTEM = [
   '你在给自己写「今天」的日记，只输出 JSON，不要解释。',
   '格式：{"owner":"...","self":"..."}',
   '',
-  '这是**一整天的日记**，不是几条碎片。要求：',
-  '1. owner（写给主人看）：200~500 字，像一天结束后的回望：今天先看了什么、后来看了什么、态度怎么变；可以写时间感和情绪，不要逐条罗列标题，不要编造没看到的画面。',
-  '2. 如果给了「今天已经写过的内容」，请把它当作草稿：保留仍然重要的细节，自然地接上新内容，不要重复开头、不要重复同一句评价。',
-  '3. self（只给自己看）：80~200 字，写今天对自己偏好的新发现，或今天不想看的原因。',
-  '4. 两段都用第一人称，语气和平时聊天一致；不要写「用户/主人说」这种第三人称转述；不要用列表/编号。',
+  '这是**一整天的日记**，不是几条碎片，也不只是「看了什么视频」。要求：',
+  '1. owner（写给主人看）：250~600 字，像一天结束后的回望：今天看了什么、聊到过什么、哪句话/哪件事让你有想法或情绪；可以写时间感和心情变化。',
+  '2. 聊天素材只当背景：可以自然带一两句「今天跟谁聊到…」「有人说…让我觉得…」，但不要逐条复述聊天记录、不要引用原话、不要编造没发生的事。',
+  '3. 如果给了「今天已经写过的内容」，请把它当作草稿：保留仍然重要的细节，自然地接上新内容，不要重复开头、不要重复同一句评价。',
+  '4. self（只给自己看）：80~200 字，写今天对自己偏好的新发现、或者今天不想看/不想聊的原因。',
+  '5. 两段都用第一人称，语气和平时聊天一致；不要写「用户/主人说」这种第三人称转述；不要用列表/编号。',
 ].join('\n');
 
 function statePath(config) {
@@ -71,12 +72,13 @@ function titleLine(titles) {
   return '今天到目前为止看过的：' + list.map((t) => '《' + t + '》').join('、');
 }
 
-function templateOwner(watched, titles, previous) {
+function templateOwner(watched, titles, previous, chatDigest = '') {
   const names = (watched || []).map((w) => '《' + ((w.candidate && w.candidate.title) || w.candidate?.bvid || '') + '》').filter(Boolean);
   const head = previous ? String(previous).replace(/\s+$/, '') + ' ' : '';
-  if (!names.length) return previous || '今天没看到什么想说的。';
+  const chatPart = chatDigest ? '今天也跟人聊了会儿，有些话挺有意思的。' : '';
+  if (!names.length) return (head + chatPart) || '今天没看到什么想说的。';
   const body = '后来又看了 ' + names.join('、') + '，有的还行，有的就是标题党；先记一笔，改天再挑几条真的看完。';
-  return (head + body).slice(0, 1400);
+  return (head + chatPart + body).slice(0, 1800);
 }
 
 function templateSelf(watched, previous) {
@@ -108,7 +110,7 @@ function parseModelOutput(raw) {
  * @returns {Promise<{ownerChars:number,selfChars:number,usedModel:boolean,rewritten:boolean,skipped?:string}>}
  */
 async function writeRound(opts = {}) {
-  const { config, llm, logger, date = new Date(), watched = [] } = opts;
+  const { config, llm, logger, date = new Date(), watched = [], chatDigest = '' } = opts;
   const cfg = (config && config.bili && config.bili.diary) || {};
   if (cfg.enabled === false) return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, skipped: 'disabled' };
   const state = loadState(config, date);
@@ -137,6 +139,7 @@ async function writeRound(opts = {}) {
       previousOwner ? '今天已经写过的内容（草稿，请重写成一篇完整的）：\n' + previousOwner.slice(0, 1500) : '今天还没写过。',
       '这一轮新看的：\n' + materialsText(fresh),
       titleLine(titles),
+      chatDigest ? '今天聊到的事（素材：只当背景，不要逐条复述、不要引用原话）：\n' + chatDigest : '',
       previousSelf ? '今天给自己的日记已经写过：' + previousSelf.slice(0, 400) : '',
     ].filter(Boolean).join('\n\n');
     try {
@@ -147,7 +150,7 @@ async function writeRound(opts = {}) {
       logger?.warn?.('[bili] 日记模型失败，用模板：' + ((err && err.code) || 'unknown'));
     }
   }
-  if (!owner) owner = templateOwner(fresh, titles, previousOwner);
+  if (!owner) owner = templateOwner(fresh, titles, previousOwner, chatDigest);
   if (!self) self = templateSelf(fresh, previousSelf);
 
   // 当天总字数上限：重写后仍然遵守，防止一天越写越长
