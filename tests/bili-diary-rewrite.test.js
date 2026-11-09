@@ -1,0 +1,110 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const diaryFormat = require('../src/core/bili/diaryFormat');
+const diary = require('../src/services/bili/diary');
+const biliStore = require('../src/infra/biliStore');
+
+function tmpConfig(diaryOverrides = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bili-rewrite-'));
+  return {
+    root,
+    config: {
+      paths: { dataDir: path.join(root, 'data') },
+      bili: { diary: { enabled: true, maxCharsPerDay: 3000, maxRewritesPerDay: 8, ...diaryOverrides } },
+    },
+  };
+}
+
+const day = new Date(2026, 10, 8, 20, 30, 0);
+
+function candidate(bvid, title) {
+  return { bvid, title, owner: { name: 'UP' }, durationSec: 600 };
+}
+
+test('replaceSection：只替换目标那天，其它天与顺序不变', () => {
+  const md = [
+    '## 2026-11-07', '', '昨天的事。', '',
+    '## 2026-11-08', '', '旧的一天。', '',
+    '## 2026-11-09', '', '明天的事。', '',
+  ].join('\n');
+  const out = diaryFormat.replaceSection(md, day, '重写后的今天。');
+  assert.equal(diaryFormat.digestOf(out, day), '重写后的今天。');
+  assert.equal(diaryFormat.digestOf(out, new Date(2026, 10, 7)), '昨天的事。');
+  assert.equal(diaryFormat.digestOf(out, new Date(2026, 10, 9)), '明天的事。');
+  assert.equal(diaryFormat.countDays(out), 3);
+});
+
+test('replaceSection：不存在的一天会追加成新的一节', () => {
+  const out = diaryFormat.replaceSection('## 2026-11-07\n\n昨天。\n', day, '今天。');
+  assert.equal(diaryFormat.countDays(out), 2);
+  assert.equal(diaryFormat.digestOf(out, day), '今天。');
+});
+
+test('writeRound：第一次写当天，只有一节', async () => {
+  const { config, root } = tmpConfig();
+  const out = await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  assert.equal(out.rewritten, true);
+  assert.ok(out.ownerChars > 0);
+  const owner = fs.readFileSync(biliStore.paths(config).diaryOwner, 'utf8');
+  assert.equal(diaryFormat.countDays(owner), 1);
+  assert.match(owner, /猫猫/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('writeRound：同一天看了新视频 → 重写当天那一节（不是追加），两件事都在同一篇里', async () => {
+  const { config, root } = tmpConfig();
+  const first = await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const second = await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV2xx411c7mD', 'AI 实测'), digest: '' }] });
+  assert.equal(second.rewritten, true);
+  assert.ok(second.ownerChars > first.ownerChars, '重写后应包含当天全部内容');
+  const owner = fs.readFileSync(biliStore.paths(config).diaryOwner, 'utf8');
+  assert.equal(diaryFormat.countDays(owner), 1, '仍然只有一节');
+  assert.match(owner, /猫猫/);
+  assert.match(owner, /AI 实测/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('writeRound：没有新视频就不写（不白烧 token）', async () => {
+  const { config, root } = tmpConfig();
+  await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const again = await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  assert.equal(again.rewritten, false);
+  assert.equal(again.skipped, 'no_new_video');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('writeRound：超过 maxRewritesPerDay 就不再重写', async () => {
+  const { config, root } = tmpConfig({ maxRewritesPerDay: 1 });
+  await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const out = await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV2xx411c7mD', 'AI'), digest: '' }] });
+  assert.equal(out.rewritten, false);
+  assert.equal(out.skipped, 'rewrite_cap');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('writeRound：模型能看到「今天已经写过的内容」并重写', async () => {
+  const { config, root } = tmpConfig();
+  await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const seen = [];
+  const llm = {
+    isMock: false,
+    complete: async ({ system, turns }) => {
+      seen.push({ system, content: turns[0].content });
+      return '{"owner":"今天先看了猫猫，后来又看了 AI，猫猫更治愈。","self":"更喜欢猫，AI 得讲得接地气。"}';
+    },
+  };
+  const out = await diary.writeRound({ config, llm, date: day, watched: [{ candidate: candidate('BV2xx411c7mD', 'AI 实测'), digest: '【B站视频】AI 实测' }] });
+  assert.equal(out.usedModel, true);
+  assert.match(seen[0].content, /今天已经写过的内容/);
+  assert.match(seen[0].content, /猫猫/, '草稿里要有之前写的');
+  assert.match(seen[0].system, /一整天的日记/);
+  const owner = fs.readFileSync(biliStore.paths(config).diaryOwner, 'utf8');
+  assert.match(owner, /更治愈/);
+  assert.equal(diaryFormat.countDays(owner), 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});

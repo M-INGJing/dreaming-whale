@@ -129,6 +129,21 @@ function appendDiary(config, kind, date, body) {
   return file;
 }
 
+/** 同一天重写成一篇完整日记（替换当天那一节，不追加）。 */
+function writeDiarySection(config, kind, date, body) {
+  const p = paths(config);
+  const file = kind === 'self' ? p.diarySelf : p.diaryOwner;
+  ensureDir(file);
+  const text = String(body == null ? '' : body).trim();
+  if (!text) return '';
+  const existing = readText(file);
+  const next = diaryFormat.replaceSection(existing, date, text);
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, next, 'utf8');
+  fs.renameSync(tmp, file);
+  return file;
+}
+
 /** 状态页用：只回计数与最近标题，不回日记正文。 */
 function diarySummary(config, date) {
   const p = paths(config);
@@ -168,5 +183,5 @@ function mergeTitles(config, map) {
 
 module.exports = {
   REL, paths, rootOf, readJson, writeJson, readText, appendEvent, appendFeedLog,
-  appendDiary, diarySummary, readDiaries, readTitles, mergeTitles,
+  appendDiary, writeDiarySection, diarySummary, readDiaries, readTitles, mergeTitles,
 };

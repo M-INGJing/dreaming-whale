@@ -242,7 +242,7 @@ const DEFAULT_CONFIG = {
     },
     share: { enabled: true, minScore: 13, daily: 3, minGapMinutes: 120, silentAfterDays: 3, chats: [] },
     risk: { minGapMs: 1500, readHourly: 120, readDaily: 400, writeHourly: 0, writeDaily: 0, writeGapSec: 120 },
-    diary: { enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 400, maxCharsPerDay: 3000, maxEntriesPerDay: 4 },
+    diary: { enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 400, maxCharsPerDay: 3000, maxEntriesPerDay: 4, maxRewritesPerDay: 8 },
     // 评论区说话方式：只学「气口」（短句/口头禅），最多 20 条、30 天不用就衰减；聊天里最多注入 3 条
     style: { enabled: true },
     write: { enabled: false },

@@ -216,6 +216,9 @@ function createBiliScheduler(opts = {}) {
         logger?.warn?.('[bili] 标题缓存写入失败：' + ((err && err.code) || 'io'));
       }
       const diary = await writeDiary({ config: cfg, llm: runtime && runtime.llm, logger, date: now, watched });
+      if (diary && diary.skipped) {
+        biliStore.appendEvent(cfg, { kind: 'diary_skipped', reason: diary.skipped });
+      }
       // 分享：分数够 + 配额够 + 时间间隔够，才入队；桥接会在 30 秒内取走发送。
       let share = null;
       try {

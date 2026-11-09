@@ -77,6 +77,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 改进 · 日记改成「每天一篇、整天重写」
+
+- 以前每醒一次就往当天追加一段，各段独立生成：没有时间线、每段重新开头、语气跳，读起来像拼凑。
+- 现在每轮把「今天已经写过的草稿」+「这一轮新看的视频」+「今天已看过的标题」一起交给模型，**整体重写当天那一节**；`diaryFormat.replaceSection` 只替换目标日期，其它天原样保留。
+- 没有新视频就不写（`skipped=no_new_video`），避免同一批内容反复重写烧 token；`diary.maxRewritesPerDay`（默认 8）兜底。
+- 提示词改成「一整天的日记」：写时间感/态度变化，不逐条罗列，不重复开头；owner 200~500 字、self 80~200 字；仍受 `maxCharsPerDay` 限制。
+- 新增 `tests/bili-diary-rewrite.test.js`(7)：只替换目标天、同日重写不追加、无新视频跳过、重写上限、模型能看到草稿。
+
 ### 修复 · 日记日期切到旧的一天会被自动拉回最新一天
 
 - 原因：B 站页每 2 秒被 `IRefreshable` 刷新一次，`LoadDiaryAsync` 每次都重建日期下拉并 `SelectedIndex = 0`，把用户选的 11.08 拉回 11.09。

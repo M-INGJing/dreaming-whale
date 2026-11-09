@@ -27,6 +27,40 @@ function section(date, body) {
   return '## ' + today(date) + '\n\n' + text + '\n';
 }
 
+/**
+ * 替换某一天的那一节（保留其它天与顺序）。
+ *
+ * 写日记不再「追加一段」——同一天被重写成一篇完整的日记，避免读起来像几段拼凑。
+ */
+function replaceSection(markdown, date, body) {
+  const key = today(date);
+  const text = clean(body);
+  if (!text) return String(markdown || '');
+  const source = String(markdown || '');
+  const lines = source.split('\n');
+  const out = [];
+  let replaced = false;
+  let i = 0;
+  while (i < lines.length) {
+    const m = DAY_HEADING.exec(lines[i].trim());
+    if (!m) { out.push(lines[i]); i += 1; continue; }
+    let end = i + 1;
+    while (end < lines.length && !DAY_HEADING.test(lines[end].trim())) end += 1;
+    if (m[1] === key) {
+      out.push('## ' + key, '', text, '');
+      replaced = true;
+    } else {
+      for (let j = i; j < end; j += 1) out.push(lines[j]);
+    }
+    i = end;
+  }
+  if (!replaced) {
+    if (out.length && out[out.length - 1].trim() !== '') out.push('');
+    out.push('## ' + key, '', text, '');
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '\n');
+}
+
 /** 当天摘要（≤ maxChars），给聊天里「你今天看了啥」用；不是全文。 */
 function digestOf(markdown, date, maxChars = 200) {
   const text = String(markdown || '');
@@ -53,4 +87,4 @@ function countDays(markdown) {
   return String(markdown || '').split('\n').filter((line) => DAY_HEADING.test(line.trim())).length;
 }
 
-module.exports = { today, section, digestOf, countDays, DAY_HEADING, clean };
+module.exports = { today, section, replaceSection, digestOf, countDays, DAY_HEADING, clean };
