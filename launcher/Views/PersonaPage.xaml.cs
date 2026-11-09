@@ -368,8 +368,8 @@ namespace WhaleLauncher.Views
             if (_loading || !_sup.NodeRunning) return;
 
             int age = int.TryParse(TxtAge.Text.Trim(), out var a) ? Math.Clamp(a, 1, 120) : 23;
-            int priv = int.TryParse(TxtPrivate.Text.Trim(), out var pv) ? Math.Clamp(pv, 40, 800) : 140;
-            int grp = int.TryParse(TxtGroup.Text.Trim(), out var gv) ? Math.Clamp(gv, 20, 300) : 70;
+            int priv = int.TryParse(TxtPrivate.Text.Trim(), out var pv) ? Math.Clamp(pv, 4, 800) : 140;
+            int grp = int.TryParse(TxtGroup.Text.Trim(), out var gv) ? Math.Clamp(gv, 4, 300) : 70;
             int turns = int.TryParse(TxtTurns.Text.Trim(), out var tv) ? Math.Clamp(tv, 4, 400) : 200;
             int gturns = int.TryParse(TxtGroupTurns.Text.Trim(), out var gtv) ? Math.Clamp(gtv, 2, 300) : 150;
             int bubbles = int.TryParse(TxtBubbles.Text.Trim(), out var bv) ? Math.Clamp(bv, 1, 8) : 2;

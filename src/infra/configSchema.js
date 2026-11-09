@@ -32,8 +32,8 @@ const FIELDS = {
   // ---- 对话 ----
   'chat.historyTurns': { type: 'int', min: 2, max: 800 },
   'chat.groupHistoryTurns': { type: 'int', min: 2, max: 800 },
-  'chat.privateMaxChars': { type: 'int', min: 20, max: 4000 },
-  'chat.groupMaxChars': { type: 'int', min: 20, max: 4000 },
+  'chat.privateMaxChars': { type: 'int', min: 4, max: 4000 },
+  'chat.groupMaxChars': { type: 'int', min: 4, max: 4000 },
   'chat.maxBubbles': { type: 'int', min: 1, max: 12 },
 
   // ---- 采样参数 ----

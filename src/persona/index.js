@@ -810,6 +810,24 @@ function maxCharsFor(config, msg = {}) {
 }
 
 /**
+ * 硬截断：提示词里的「最多约 N 字」只是请求，模型可能超；这里在发送前再兜一层。
+ * 优先在标点处截，找不到就硬切（长度按 JS 字符数算，和设置页的「字」一致）。
+ */
+function clipToLimit(text, maxChars) {
+  const value = String(text == null ? '' : text);
+  const limit = Math.max(1, Math.min(4000, Number(maxChars) || LIMITS.maxOutputNormal));
+  if (value.length <= limit) return value;
+  const head = value.slice(0, limit);
+  const boundary = Math.max(
+    head.lastIndexOf('，'), head.lastIndexOf('。'), head.lastIndexOf('！'), head.lastIndexOf('？'),
+    head.lastIndexOf('；'), head.lastIndexOf('、'), head.lastIndexOf(','), head.lastIndexOf('.'),
+    head.lastIndexOf('!'), head.lastIndexOf('?'), head.lastIndexOf('\n'),
+  );
+  const cut = boundary >= Math.max(2, Math.floor(limit * 0.5)) ? head.slice(0, boundary) : head;
+  return cut.trim() || head.trim();
+}
+
+/**
  * 把提示词拆成「静态块 / 本轮状态块」。
  * static 进 system；dynamic 进最后一条 user 消息（顺序：正文 → 记忆块 → 本轮状态）。
  * @returns {{static: string[], dynamic: string[]}}
@@ -1491,6 +1509,8 @@ module.exports = {
   mockReply,
   cleanIncomingForPersona,
   splitBubbles,
+  clipToLimit,
+  maxCharsFor,
   aliasList,
   slangTerms,
   emojiChanceFor,

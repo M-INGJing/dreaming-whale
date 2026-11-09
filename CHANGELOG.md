@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 私聊/群聊字数上限设 10 却不生效
+
+- 原因一：启动器把它夹到 40/20（`Math.Clamp(pv, 40, 800)`、`Math.Clamp(gv, 20, 300)`），服务端 `applyPersonaPatch` 又夹了一次，所以 config 实际是 40/20，提示词也按 40/20 写。
+- 原因二：字数上限只是提示词里的「最多约 N 字」，模型超了没有发送前兜底；认真讨论还会切到 `discussionMaxChars`（默认 600）。
+- 修复：三处下限统一降到 4（启动器、服务端、configSchema）；新增 `persona.clipToLimit()` 在发送/落库前硬截断（优先在标点处截，不超过上限）；超长会记一行日志。
+- 本机 `chat.privateMaxChars/groupMaxChars` 已改为 10；新增 `tests/persona-limit.test.js`(3)。
+
 ### 修复 · 语音回复里带颜文字/emoji 导致念出来很怪
 
 - 合成前新增 `voice_reply.sanitize_for_speech()`：去颜文字（含残留的阿拉伯/泰文/谚文符号）、emoji、markdown、链接、零宽字符，合并多余空格；保留「（歪头）」这类中文动作。
