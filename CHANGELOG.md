@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 鲸鲸不记得自己发过 B 站分享
+
+- 原因：分享由桥接直接从队列发出，内核记忆里没有这条消息，所以她被问「你是不是给我发了个视频」时会答「没有」。
+- 修复：`POST /api/bili/ack` 在确认「已发出」后，把分享原文补一条 assistant 消息写进对应会话记忆（私聊/群聊 key 分开）；重复 ack 不会重复写。
+- 启动时补记最近 2 天已发出的分享（`shareMemory.backfill`），修复前发过的也能补上；超过 2 天的不补。
+- 新增 `tests/bili-share-memory.test.js`(5)：会话 key 映射、写入 assistant 消息、空值跳过、重复 ack 不重复、启动补记。
+
 ### 新增 · 每周日根据这一周的日记更新「我最近的状态」
 
 - 新增 `src/services/bili/weekly.js`：每周日 22:00 后（本地时间）把最近 7 天的两本日记压成一份小总结 `{summary, likes, dislikes, state}`，存 `data/bili/diary/weekly.json`；一周只跑一次，失败/无日记不打扰。

@@ -201,6 +201,13 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
   } catch (err) {
     logger.warn('表情包收藏 worker 启动失败（不影响聊天）：' + describeError(err));
   }
+  // B 站分享补记：把最近已发出的分享写进聊天记忆，她才知道自己发过
+  try {
+    const restored = require('./services/bili/shareMemory').backfill(runtime);
+    if (restored) logger.info('B 站分享启动补记：' + restored + ' 条');
+  } catch (err) {
+    logger.warn('B 站分享补记失败（不影响聊天）：' + describeError(err));
+  }
   watchConfigFile(runtime);
   // 探针：createRuntime 结束 = server.js 可以 listen 的时刻，这条就是「启动被堵了多久」
   probe.emit(logger, 'info', `createRuntime 耗时=${probe.ms(probe.now() - probeT0)}ms（listen 之前）`);

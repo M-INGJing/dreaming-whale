@@ -164,6 +164,14 @@ module.exports = function register(router) {
     if (!id) return json(res, 400, { ok: false, error: '缺少 id' });
     const status = body.status === 'sent' ? 'sent' : 'failed';
     const out = outbox.ack(runtime.config, id, status, String((body && body.error) || ''));
+    // 真的发出去了才写记忆：她得知道自己发过这条，不然会答「我没发」
+    if (out.ok && out.item && out.item.status === 'sent' && !out.duplicate) {
+      try {
+        require('../../services/bili/shareMemory').record(runtime, out.item);
+      } catch (err) {
+        runtime.logger.warn('[bili] 分享写入记忆失败：' + ((err && err.code) || 'memory'));
+      }
+    }
     return json(res, 200, { ok: Boolean(out.ok), item: out.item || null, error: out.reason || '' });
   });
 

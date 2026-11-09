@@ -226,6 +226,6 @@ function sweepStale(config, now = Date.now(), ttlMs = 10 * 60000) {
 }
 
 module.exports = {
-  OUTBOX_FILE, SHARE_FILE, files, readLedger, dayKey, shareConfig, masterWxid,
+  OUTBOX_FILE, SHARE_FILE, files, readLedger, readOutbox, dayKey, shareConfig, masterWxid,
   canShare, pickTarget, pickTargets, enqueue, nextPending, claim, ack, sweepStale,
 };
