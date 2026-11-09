@@ -46,6 +46,12 @@ public sealed class BiliPage : UserControl, IRefreshable
     readonly ComboBox dayBox = new() { Width = 360, HorizontalAlignment = HorizontalAlignment.Left };
     readonly TextBlock diaryText = new() { TextWrapping = TextWrapping.Wrap, LineHeight = 20 };
     readonly List<JsonElement> diaryDays = new();
+    // 页面每 2 秒被刷新一次：日记列表只在内容变化时重建，并记住用户选的是哪一天，
+    // 否则「切到 11.08 马上被拉回 11.09」。
+    string diarySignature = "";
+    string selectedDiaryDate = "";
+    bool rebuildingDiary;
+    DateTime nextDiaryFetch = DateTime.MinValue;
     bool editorsLoaded;
     string pendingSince = "";
 
@@ -134,12 +140,12 @@ public sealed class BiliPage : UserControl, IRefreshable
         panel.Children.Add(diaryCard);
         var diaryInner = (StackPanel)diaryCard.Child;
         dayBox.Margin = new Thickness(0, 6, 0, 0);
-        dayBox.SelectionChanged += (_, _) => RenderDay(dayBox.SelectedIndex);
+        dayBox.SelectionChanged += (_, _) => OnDiaryDaySelected();
         diaryInner.Children.Add(dayBox);
         var diaryRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
         var diaryReload = new Button { Content = "刷新", MinHeight = 30 };
         diaryReload.SetResourceReference(StyleProperty, "Ghost");
-        diaryReload.Click += async (_, _) => await LoadDiaryAsync();
+        diaryReload.Click += async (_, _) => await LoadDiaryAsync(true);
         diaryRow.Children.Add(diaryReload);
         diaryInner.Children.Add(diaryRow);
         diaryText.SetResourceReference(StyleProperty, "Small");
@@ -305,7 +311,7 @@ public sealed class BiliPage : UserControl, IRefreshable
         var shareCount = res.Prop("share");
         var shares = shareCount.ValueKind == JsonValueKind.Array ? shareCount.GetArrayLength() : 0;
         runResult.Text = "跑完了：读了 " + count + " 条，日记 " + ownerChars + "/" + selfChars + " 字，分享入队 " + shares + " 条。";
-        await LoadDiaryAsync();
+        await LoadDiaryAsync(true);
         await LoadStyleAsync();
         await RefreshAsync();
     }
@@ -387,34 +393,86 @@ public sealed class BiliPage : UserControl, IRefreshable
         return list;
     }
 
-    async Task LoadDiaryAsync()
+    async Task LoadDiaryAsync(bool force = false)
     {
         if (!_sup.NodeRunning) return;
+        // 页面每 2 秒刷新：加一个 8 秒的取数节流，避免一直重查
+        if (!force && DateTime.UtcNow < nextDiaryFetch) return;
+        nextDiaryFetch = DateTime.UtcNow.AddSeconds(8);
         var res = await Api.Get(_sup.Url, "/api/bili/diary?days=60");
         if (!res.Ok)
         {
             diaryText.Text = "读取日记失败：" + (res.Error.Length > 0 ? res.Error : Api.Detail(res));
             return;
         }
-        diaryDays.Clear();
-        dayBox.Items.Clear();
         var days = res.Prop("days");
-        if (days.ValueKind == JsonValueKind.Array)
+        var signature = DiarySignature(days);
+        if (!force && signature == diarySignature) return; // 没变化：保留当前选中项，不重建
+        diarySignature = signature;
+
+        var wantDate = selectedDiaryDate;
+        rebuildingDiary = true;
+        try
         {
-            foreach (var d in days.EnumerateArray())
+            diaryDays.Clear();
+            dayBox.Items.Clear();
+            if (days.ValueKind == JsonValueKind.Array)
             {
-                diaryDays.Add(d);
-                var date = Text(d, "date");
-                var watched = d.TryGetProperty("watched", out var w) && w.ValueKind == JsonValueKind.Array ? w.GetArrayLength() : 0;
-                dayBox.Items.Add(date + "（看了 " + watched + " 条）");
+                foreach (var d in days.EnumerateArray())
+                {
+                    diaryDays.Add(d);
+                    var date = Text(d, "date");
+                    var watched = d.TryGetProperty("watched", out var w) && w.ValueKind == JsonValueKind.Array ? w.GetArrayLength() : 0;
+                    dayBox.Items.Add(date + "（看了 " + watched + " 条）");
+                }
             }
+            if (diaryDays.Count == 0)
+            {
+                diaryText.Text = "还没有日记。跑一轮之后这里就会出现「看了哪些视频 + 两本日记」。";
+                return;
+            }
+            // 优先恢复用户之前选的那一天；那天没了才回到最新的
+            var index = 0;
+            if (wantDate.Length > 0)
+            {
+                for (var i = 0; i < diaryDays.Count; i += 1)
+                {
+                    if (Text(diaryDays[i], "date") == wantDate) { index = i; break; }
+                }
+            }
+            dayBox.SelectedIndex = index;
+            selectedDiaryDate = Text(diaryDays[index], "date");
+            RenderDay(index);
         }
-        if (diaryDays.Count == 0)
+        finally
         {
-            diaryText.Text = "还没有日记。跑一轮之后这里就会出现「看了哪些视频 + 两本日记」。";
-            return;
+            rebuildingDiary = false;
         }
-        dayBox.SelectedIndex = 0;
+    }
+
+    static string DiarySignature(JsonElement days)
+    {
+        if (days.ValueKind != JsonValueKind.Array) return "none";
+        var sb = new System.Text.StringBuilder();
+        foreach (var d in days.EnumerateArray())
+        {
+            var watched = d.TryGetProperty("watched", out var w) && w.ValueKind == JsonValueKind.Array ? w.GetArrayLength() : 0;
+            var ownerLen = Text(d, "owner").Length;
+            var selfLen = Text(d, "self").Length;
+            var shares = d.TryGetProperty("shares", out var sh) && sh.ValueKind == JsonValueKind.Number ? sh.GetInt64() : 0;
+            sb.Append(Text(d, "date")).Append('|').Append(watched).Append('|').Append(ownerLen)
+              .Append('|').Append(selfLen).Append('|').Append(shares).Append(';');
+        }
+        return sb.ToString();
+    }
+
+    void OnDiaryDaySelected()
+    {
+        if (rebuildingDiary) return;
+        var index = dayBox.SelectedIndex;
+        if (index < 0 || index >= diaryDays.Count) return;
+        selectedDiaryDate = Text(diaryDays[index], "date");
+        RenderDay(index);
     }
 
     void RenderDay(int index)

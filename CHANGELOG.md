@@ -77,6 +77,11 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 日记日期切到旧的一天会被自动拉回最新一天
+
+- 原因：B 站页每 2 秒被 `IRefreshable` 刷新一次，`LoadDiaryAsync` 每次都重建日期下拉并 `SelectedIndex = 0`，把用户选的 11.08 拉回 11.09。
+- 修复：日期列表只在内容变化（签名）时重建；重建时优先恢复用户选中的日期；取数加 8 秒节流；「刷新」和「跑一轮」仍强制刷新。
+
 ### 改进 · 收藏失败原因可见、分类让路给回复、待定不再自动消失
 
 - 收藏失败常见原因：原图超过 2MB（实测 2.29MB / 4.87MB 的 GIF 被拒）。`maxFileBytes` 默认提到 **8MB**；桥接现在也会读 400 响应体，日志从「未收（）」变成「未收（too_large）」这类可读原因。
