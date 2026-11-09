@@ -294,6 +294,13 @@ function createBiliScheduler(opts = {}) {
       return {
         ok: true, dry: false, source: feed.source,
         picked: ranked.map((row) => row.candidate.bvid), watched: watched.map((w) => w.candidate.bvid),
+        // 能力执行时要把「看了哪几条、大概讲了什么」带给下一轮提示词，
+        // 否则她只有一句「看了 2 条」，被问内容就只能编。
+        watchedInfo: watched.map((w) => ({
+          bvid: w.candidate.bvid,
+          title: String(w.candidate.title || '').slice(0, 80),
+          excerpt: String(w.digest || '').replace(/^【B站视频】[^\n]*\n?/, '').slice(0, 200),
+        })),
         diary, share: share && share.ok ? share.items : null,
       };
     } finally {

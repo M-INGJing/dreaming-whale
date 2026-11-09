@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 她真刷了视频，但自己不知道、回答靠编
+
+- 原因：能力执行记录只有「看了 2 条视频，日记写了 N 字」，没记具体是哪几条、讲了什么；下一轮提示词里的「你最近做过的」没有事实，她只能编。
+- 修复：`bili.watch` 执行结果带上 `detail.items = [{bvid,title,excerpt}]`（标题 + 摘要/字幕摘录），写入 `data/caps/actions.json`；`recentBlock` 注入时显示「1.《标题》（摘要）」。
+- 提示词加严：写标记后也要等系统执行完（下一轮看「你最近做过的」），在那之前不要描述看到了什么、更不要编。
+- 已把 23:26 那次真实观看的两条记录补齐标题与摘要。
+
 ### 修复 · 消息「被截断」（小字数上限时 splitBubbles 硬切）
 
 - 原因：`splitBubbles` 在 `maxChars` 很小（如设置的 10 字）且只允许 1 条气泡时，会走 `slice(0, limit-1)+'…'` 的硬切路径；所以回复看起来像说到一半被砍断。

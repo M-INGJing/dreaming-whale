@@ -78,13 +78,24 @@ test('run：逛 B 站会执行调度器且 noShare=true，结果写进动作记�
   runtime.biliScheduler = {
     runRound: async (opts) => {
       captured = opts;
-      return { ok: true, watched: ['BV1xx411c7mD', 'BV2xx411c7mD'], diary: { ownerChars: 42 } };
+      return {
+        ok: true,
+        watched: ['BV1xx411c7mD', 'BV2xx411c7mD'],
+        watchedInfo: [
+          { bvid: 'BV1xx411c7mD', title: '猫猫日常', excerpt: '一只猫在窗台上打滚，配文很治愈。' },
+          { bvid: 'BV2xx411c7mD', title: 'AI 实测', excerpt: '实测 DeepSeek 清理 C 盘，翻车了两次。' },
+        ],
+        diary: { ownerChars: 42 },
+      };
     },
   };
+  biliStore.mergeTitles(config, { BV1xx411c7mD: '猫猫日常', BV2xx411c7mD: 'AI 实测' });
   const out = await capabilities.run(runtime, ['bili.watch'], { now: new Date(2026, 10, 9, 22, 0) });
   assert.equal(out[0].ok, true);
   assert.equal(captured.noShare, true, '自己的能力调用不主动发分享');
   assert.match(out[0].summary, /看了 2 条/);
+  assert.equal(out[0].detail.items[0].title, '猫猫日常');
+  assert.match(out[0].detail.items[0].excerpt, /打滚/);
   const actions = capabilities.readActions(config);
   assert.equal(actions.length, 1);
   assert.equal(actions[0].id, 'bili.watch');
@@ -92,6 +103,8 @@ test('run：逛 B 站会执行调度器且 noShare=true，结果写进动作记�
   const recent = capabilities.recentBlock(config, new Date(2026, 10, 9, 22, 5));
   assert.match(recent, /你最近做过的/);
   assert.match(recent, /22:00 逛 B 站/);
+  assert.match(recent, /猫猫日常/, '最近做过要带具体标题');
+  assert.match(recent, /打滚/, '还要带一点内容摘要，否则她下一轮只能编');
   fs.rmSync(root, { recursive: true, force: true });
 });
 

@@ -103,6 +103,8 @@ function record(config, entry, now = new Date()) {
     label: String(entry.label || entry.id || ''),
     ok: Boolean(entry.ok),
     summary: String(entry.summary || '').slice(0, 160),
+    // 具体做了什么（例如看了哪几条视频）——只给下一轮提示词用，没有就不带
+    detail: entry.detail && typeof entry.detail === 'object' ? entry.detail : null,
   });
   writeActions(config, items);
 }
@@ -120,9 +122,27 @@ const REGISTRY = [
       if (!scheduler) return { ok: false, summary: 'B 站调度器没启动' };
       const out = await scheduler.runRound({ dry: false, now, noShare: true });
       if (!out || !out.ok) return { ok: false, summary: '这轮没看成（' + ((out && out.reason) || '未知') + '）' };
-      const n = Array.isArray(out.watched) ? out.watched.length : 0;
+      const watched = Array.isArray(out.watched) ? out.watched.slice(0, 5) : [];
       const chars = out.diary && out.diary.ownerChars ? out.diary.ownerChars : 0;
-      return { ok: true, summary: '看了 ' + n + ' 条视频，日记写了 ' + chars + ' 字' };
+      // 把「具体看了哪几条、大概讲了什么」一起记下来：只说「看了 2 条」，下一轮她仍然答不出讲的啥，只能编。
+      let titles = {};
+      try {
+        const biliStore = require('../infra/biliStore');
+        titles = biliStore.readTitles(runtime.config) || {};
+      } catch { titles = {}; }
+      const info = Array.isArray(out.watchedInfo) && out.watchedInfo.length ? out.watchedInfo : null;
+      const items = info
+        ? info.slice(0, 5).map((row) => ({
+          bvid: String(row.bvid || ''),
+          title: String(row.title || titles[row.bvid] || '').slice(0, 60),
+          excerpt: String(row.excerpt || '').replace(/\s+/g, ' ').slice(0, 160),
+        }))
+        : watched.map((bvid) => ({ bvid: String(bvid), title: String(titles[bvid] || '').slice(0, 60), excerpt: '' }));
+      return {
+        ok: true,
+        summary: '看了 ' + items.length + ' 条视频，日记写了 ' + chars + ' 字',
+        detail: { items },
+      };
     },
   },
   {
@@ -216,7 +236,7 @@ function block(config) {
   const lines = ['【你会自己做的事（不是每轮都做）】'];
   for (const item of items) lines.push('- ' + item.label + '（id：' + item.id + '）：' + item.desc);
   lines.push('只有对方明确让你做、或你确实想做时才做。要做，就在回复最后单独写一行 [[cap:id]]（把 id 换成上面括号里的 id，例如 [[cap:bili.watch]]；一次最多一个），系统会执行；不想做、拿不准，就不要写。');
-  lines.push('**说和做必须一致**：没有写标记就等于没做，不要说自己「刷了 / 看了 / 写了」；写了标记才可以说自己做了。系统会在后台执行，结果可以在之后的对话里自然提起。');
+  lines.push('**说和做必须一致**：没有写标记就等于没做，不要说自己「刷了 / 看了 / 写了」；写了标记也要等系统执行完（下一轮看「你最近做过的」里的具体标题），在那之前别描述看到了什么，更不要编。');
   return lines.join('\n');
 }
 
@@ -229,7 +249,15 @@ function recentBlock(config, now = new Date()) {
     const time = new Date(Number(row.at) || Date.now());
     const hh = String(time.getHours()).padStart(2, '0');
     const mm = String(time.getMinutes()).padStart(2, '0');
-    lines.push('- ' + hh + ':' + mm + ' ' + (row.label || row.id) + '：' + (row.ok ? row.summary : '没成功（' + row.summary + '）'));
+    let line = '- ' + hh + ':' + mm + ' ' + (row.label || row.id) + '：' + (row.ok ? row.summary : '没成功（' + row.summary + '）');
+    const items = row.detail && Array.isArray(row.detail.items) ? row.detail.items : [];
+    if (items.length) {
+      line += '；具体是：' + items.map((it, i) => {
+        const head = (i + 1) + '.《' + (it.title || it.bvid || '?') + '》';
+        return it.excerpt ? head + '（' + String(it.excerpt).slice(0, 80) + '）' : head;
+      }).join(' ');
+    }
+    lines.push(line);
   }
   return lines.join('\n');
 }
@@ -259,7 +287,9 @@ async function run(runtime, ids, ctx = {}) {
       result = { ok: false, summary: (err && err.code) || '执行失败' };
     }
     const final = result || { ok: false, summary: '没有结果' };
-    record(runtime.config, { id, label: entry.label, ok: final.ok, summary: final.summary }, now);
+    record(runtime.config, {
+      id, label: entry.label, ok: final.ok, summary: final.summary, detail: final.detail,
+    }, now);
     runtime.logger?.info?.('[cap] ' + id + ' ' + (final.ok ? '完成' : '失败') + '：' + final.summary);
     results.push({ id, label: entry.label, ...final });
   }
