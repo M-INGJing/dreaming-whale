@@ -71,6 +71,8 @@ const FIELDS = {
   'sticker.collect.pendingTtlDays': { type: 'int', min: 0, max: 365 },
   'sticker.collect.allowNewCategories': { type: 'bool' },
   'sticker.collect.classifyDelaySec': { type: 'int', min: 0, max: 3600 },
+  'capabilities.enabled': { type: 'bool' },
+  'capabilities.maxPerDay': { type: 'int', min: 0, max: 100 },
 
   // ---- B 站养鱼（只读）----
   'bili.cookie': { type: 'string', maxLen: 4000 },

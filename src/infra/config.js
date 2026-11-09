@@ -192,6 +192,8 @@ const DEFAULT_CONFIG = {
   links: { enabled: true, timeoutMs: 6000, cacheMinutes: 60 },
   // 魔咒：主人私聊/群里输入这段数字后，获得一段时间的「管理员权限」
   admin: { spell: '', minutes: 30, allowAll: false },
+  // 鲸鲸能自己做的事（逛 B 站 / 写日记…）：聊天里由她判断要不要做，回复末尾写 [[cap:id]] 触发。
+  capabilities: { enabled: true, maxPerDay: 5 },
   // 表情包（实验性）：总闸在 features.stickers，这里只管「怎么挑、发多勤」。
   // 关闭时整个功能不生效：不挑图、不回包带字段、桥接不轮询、测试接口 404。
   sticker: {

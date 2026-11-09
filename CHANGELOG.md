@@ -77,6 +77,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · 鲸鲸的能力清单：自己决定逛 B 站 / 写日记
+
+- 新增 `src/services/capabilities.js`：能力注册表（`id/label/desc/enabled/run`）+ 提示词块 + 动作记录；当前能力：`bili.watch`（逛 B 站，只看看/写日记，不主动分享）、`bili.diary.write`（用当天聊天素材写当天日记）。
+- 聊天提示词自动带上「你会自己做的事」：她能感知能力；要做就在回复末尾写 `[[cap:能力名]]`，内核把标记从正文去掉、先回消息、后台执行（`data/caps/actions.json` 记录结果），后续回合以「你最近做过的」注入，便于她自然提起。
+- 每天最多 `capabilities.maxPerDay`（默认 5）次；能力只列当前开关可用的（B 站关掉就不出现）。
+- 扩展方式：往 `REGISTRY` 加一条并实现 `run`，提示词和标记协议自动生效。
+- 新增 `tests/capabilities.test.js`(7)：标记识别/清洗、能力清单随开关变化、noShare 执行、每日上限、动作记录、写日记能力。
+
 ### 新增 · 聊天后按概率、闲时更新当天日记
 
 - 每聊完一轮，按 `bili.diary.chatChance`（默认 0.15）掷一次「等会儿更新日记」；回复优先，掷中只排队、不立刻写。

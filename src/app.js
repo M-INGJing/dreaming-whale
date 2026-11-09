@@ -217,6 +217,22 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
   } catch (err) {
     logger.warn('日记闲时更新启动失败（不影响聊天）：' + describeError(err));
   }
+  // 能力执行：她在回复里写 [[cap:id]]，内核在后台替她做（逛 B 站 / 写日记…）
+  try {
+    const capabilities = require('./services/capabilities');
+    runtime.capabilities = capabilities;
+    runtime.bot.runCapabilities = (ids) => {
+      capabilities.run(runtime, ids, { now: new Date() })
+        .then((results) => {
+          for (const row of results || []) {
+            logger.info('[cap] ' + row.id + ' ' + (row.ok ? '完成' : '失败') + '：' + row.summary);
+          }
+        })
+        .catch((err) => logger.warn('[cap] 执行失败：' + describeError(err)));
+    };
+  } catch (err) {
+    logger.warn('能力清单启动失败（不影响聊天）：' + describeError(err));
+  }
   watchConfigFile(runtime);
   // 探针：createRuntime 结束 = server.js 可以 listen 的时刻，这条就是「启动被堵了多久」
   probe.emit(logger, 'info', `createRuntime 耗时=${probe.ms(probe.now() - probeT0)}ms（listen 之前）`);

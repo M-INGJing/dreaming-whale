@@ -146,7 +146,7 @@ function createBiliScheduler(opts = {}) {
   }
 
   /** 手动/定时跑一轮。dry=true 只看会选什么，不读视频、不写日记、不记账。 */
-  async function runRound({ dry = false, now = nowFn() } = {}) {
+  async function runRound({ dry = false, now = nowFn(), noShare = false } = {}) {
     if (running) return { ok: false, reason: 'busy' };
     const cfg = config();
     if (!features.isOn(cfg, 'bili')) return { ok: false, reason: 'disabled' };
@@ -231,7 +231,11 @@ function createBiliScheduler(opts = {}) {
         biliStore.appendEvent(cfg, { kind: 'diary_skipped', reason: diary.skipped });
       }
       // 分享：分数够 + 配额够 + 时间间隔够，才入队；桥接会在 30 秒内取走发送。
+      // 能力调用（她自己决定逛 B 站）传 noShare=true：只看看、写日记，不往群里发。
       let share = null;
+      if (noShare) {
+        biliStore.appendEvent(cfg, { kind: 'share_skip', reason: 'no_share' });
+      } else {
       try {
         outbox.sweepStale(cfg);
         const best = ranked[0];
@@ -267,10 +271,12 @@ function createBiliScheduler(opts = {}) {
       } catch (err) {
         logger?.warn?.('[bili] 分享入队失败：' + ((err && err.code) || 'unknown'));
       }
+      }
       const reads = 1 + deep * 3;
       let qa = quota.noteRead(allow.state, reads, now);
       saveQuota(qa);
-      const state = loadState(now);      const seen = Array.from(new Set([...(state.seen || []), ...watched.map((w) => w.candidate.bvid)])).slice(-300);
+      const state = loadState(now);
+      const seen = Array.from(new Set([...(state.seen || []), ...watched.map((w) => w.candidate.bvid)])).slice(-300);
       const next = { ...state, wakes: state.wakes + 1, lastWakeAt: now.getTime(), seen };
       saveState(next);
       biliStore.appendFeedLog(cfg, now, ranked.map((row) => ({

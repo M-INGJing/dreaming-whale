@@ -25,6 +25,7 @@ const links = require('../adapters/links');
 const searchService = require('../services/search');
 const biliWatch = require('../services/biliWatch');
 const biliChat = require('../services/bili/chat');
+const capabilities = require('../services/capabilities');
 const { LlmError } = require('../llm/client');
 const { describeError } = require('../infra/errors');
 const { saveSettings } = require('../infra/config');
@@ -939,7 +940,12 @@ class Bot {
     });
     const system = promptParts.system;
     // 桥接状态接在本轮状态最后一行；旧行为路径（tail 为空）也照样带上
-    const tail = [promptParts.tail, turnState.bridgeLine].filter(Boolean).join('\n');
+    const tail = [
+      promptParts.tail,
+      capabilities.block(this.config),
+      capabilities.recentBlock(this.config, now),
+      turnState.bridgeLine,
+    ].filter(Boolean).join('\n');
     // 记忆块 = 人物卡/事件/摘要 + 关系卡 + B 站块（日记摘要 / 评论区说话习惯，都可为空）
     let biliBlock = '';
     try {
@@ -1726,6 +1732,18 @@ class Bot {
         decision.finalText = text;
       }
     }
+    // 能力标记：她自己决定要做的（[[cap:bili.watch]]）——标记不发给对方，执行放后台
+    let capIds = [];
+    try {
+      capIds = capabilities.detect(text);
+      if (capIds.length) {
+        text = capabilities.strip(text) || '好，我去做。';
+        decision.finalText = text;
+        this.logger && this.logger.info('[cap] 收到能力标记：' + capIds.join(','));
+      }
+    } catch (err) {
+      this.logger && this.logger.warn('[cap] 解析能力标记失败：' + describeError(err));
+    }
     // 记一笔全局回复时间（跨会话共用），_decide 的全局闸门读它
     this.globalReplyTimes.push(this.now().getTime());
     if (this.globalReplyTimes.length > 600) this.globalReplyTimes = this.globalReplyTimes.slice(-300);
@@ -1753,6 +1771,14 @@ class Bot {
       if (typeof this.afterChat === 'function') this.afterChat({ key: decision.key, chatType: msg.chatType });
     } catch (err) {
       this.logger && this.logger.warn('[diary] 聊天后钩子失败：' + describeError(err));
+    }
+    // 能力执行：不阻塞这条回复，后台跑；结果会记进「你最近做过的」
+    if (capIds.length && typeof this.runCapabilities === 'function') {
+      try {
+        this.runCapabilities(capIds, msg);
+      } catch (err) {
+        this.logger && this.logger.warn('[cap] 启动能力失败：' + describeError(err));
+      }
     }
     // 每轮一个 checkpoint：重启后能知道停在哪、episode 有没有关
     try {
