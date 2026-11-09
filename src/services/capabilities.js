@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const features = require('../infra/features');
 
-const MARK_RE = /\[\[cap:([a-z0-9_.-]+)\]\]/gi;
+const MARK_RE = /\[\[cap:([^\]\n]{1,40})\]\]/gi;
 const DEFAULT_MAX_PER_DAY = 5;
 const MAX_ACTIONS = 200;
 
@@ -189,7 +189,13 @@ function detect(text) {
   let m;
   MARK_RE.lastIndex = 0;
   while ((m = MARK_RE.exec(value))) {
-    const id = m[1].toLowerCase();
+    const raw = String(m[1] || '').trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    const hit = REGISTRY.find((entry) => entry.id === key)
+      || REGISTRY.find((entry) => String(entry.label).toLowerCase() === key)
+      || REGISTRY.find((entry) => entry.id.endsWith('.' + key));
+    const id = hit ? hit.id : key;
     if (!ids.includes(id)) ids.push(id);
   }
   return ids;
@@ -208,9 +214,9 @@ function block(config) {
   const items = promptItems(config);
   if (!items.length) return '';
   const lines = ['【你会自己做的事（不是每轮都做）】'];
-  for (const item of items) lines.push('- ' + item.label + '：' + item.desc);
-  lines.push('只有对方明确让你做、或你确实想做时才做。要做，就在回复最后单独写一行 [[cap:能力名]]（一次最多一个），系统会执行；不想做、拿不准，就不要写。');
-  lines.push('做完之后可以自然提起，不用播报这个标记。');
+  for (const item of items) lines.push('- ' + item.label + '（id：' + item.id + '）：' + item.desc);
+  lines.push('只有对方明确让你做、或你确实想做时才做。要做，就在回复最后单独写一行 [[cap:id]]（把 id 换成上面括号里的 id，例如 [[cap:bili.watch]]；一次最多一个），系统会执行；不想做、拿不准，就不要写。');
+  lines.push('**说和做必须一致**：没有写标记就等于没做，不要说自己「刷了 / 看了 / 写了」；写了标记才可以说自己做了。系统会在后台执行，结果可以在之后的对话里自然提起。');
   return lines.join('\n');
 }
 

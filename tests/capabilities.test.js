@@ -24,6 +24,8 @@ function tmpRuntime(overrides = {}) {
 test('detect/strip：识别能力标记并去掉，不留在正文里', () => {
   assert.deepEqual(capabilities.detect('好呀，我去看看 [[cap:bili.watch]]'), ['bili.watch']);
   assert.deepEqual(capabilities.detect('[[cap:bili.watch]] [[cap:bili.diary.write]]'), ['bili.watch', 'bili.diary.write']);
+  assert.deepEqual(capabilities.detect('[[cap:逛 B 站]]'), ['bili.watch'], '中文标签也能认');
+  assert.deepEqual(capabilities.detect('[[cap:写今天的日记]]'), ['bili.diary.write']);
   assert.deepEqual(capabilities.detect('没有标记'), []);
   assert.equal(capabilities.strip('好呀，我去看看 [[cap:bili.watch]]'), '好呀，我去看看');
 });
@@ -37,7 +39,9 @@ test('list/block：列出能力并带 UI 需要的状态；提示词只写能用
   assert.equal(items[0].maxPerDay, 5);
   const block = capabilities.block(config);
   assert.match(block, /你会自己做的事/);
-  assert.match(block, /\[\[cap:能力名\]\]/);
+  assert.match(block, /\[\[cap:id\]\]/);
+  assert.match(block, /id：bili\.watch/);
+  assert.match(block, /说和做必须一致/);
 
   const off = tmpRuntime({ config: { features: { bili: false } } }).config;
   const offItems = capabilities.list(off);
