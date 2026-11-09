@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Bridge runtime mixin: WindowMixin."""
 import engine as G
+from window_state import needs_restore, restore_calls
 
 
 class WindowMixin:
@@ -157,11 +158,22 @@ class WindowMixin:
             return '读不到窗口状态（%s）' % type(e).__name__
 
     def normalize_window(self, hwnd):
-        """微信窗口太小 / 超出屏幕 / 被挪走都会让 UI 自动化点空，统一调成稳定尺寸。"""
+        """微信窗口太小 / 超出屏幕 / 被挪走都会让 UI 自动化点空，统一调成稳定尺寸。
+
+        最小化 / 收进托盘时还必须先 ShowWindow 恢复：只 SetWindowPos 不会把窗口从
+        最小化状态拉回来，UIA 树一直是空壳，发送就会卡在「切了会话但没粘贴」。
+        """
         try:
             import win32gui
             import win32con
             import win32api
+            iconic = bool(win32gui.IsIconic(hwnd))
+            visible = bool(win32gui.IsWindowVisible(hwnd))
+            if needs_restore(iconic, visible):
+                for call in restore_calls(iconic, visible):
+                    win32gui.ShowWindow(hwnd, call)
+                G.log('微信窗口已恢复（最小化=%s 可见=%s）' % (iconic, visible))
+                G.time.sleep(1.2)
             sw, sh = (win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1))
             rect = win32gui.GetWindowRect(hwnd)
             x, y, w, h = (rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1])

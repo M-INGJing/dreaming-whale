@@ -407,6 +407,13 @@ class SenderMixin:
                     G.log('初始化微信窗口驱动…（会抢一下焦点，约 5~10 秒）')
                     self.gui = self.WeChatGUI()
             self.bind_gui_window(self.gui)
+            # 微信最小化/收托盘时，UIA 树是空壳：只切会话不会粘贴。发送前先恢复窗口。
+            try:
+                hwnd = int(self.ACCOUNT.get('hwnd') or 0) or self.find_weixin_hwnd()
+                if hwnd:
+                    self.normalize_window(hwnd)
+            except Exception as e:
+                G.log('发送前窗口整理失败（继续发送）：', repr(e))
             if quote_text and G.QUOTE_REPLY:
                 G.SEND_STATE['start'] = G.time.time()
                 try:

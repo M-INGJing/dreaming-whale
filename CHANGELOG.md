@@ -77,6 +77,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 微信最小化时「切了会话但没粘贴、消息没发出」
+
+- 日志特征：`微信窗口调整：314x50 @(-32000,-32000) → 1320x900` 之后 `会话列表：主窗里找不到 session_list 锚点`、`键盘通道读不到当前会话名`，最终 `send_failed`。
+- 根因：微信被最小化/收进托盘时 UIA 树是空壳；桥接只 `SetWindowPos`（不会解除最小化），所以切了会话也没法粘贴。后台通道也用了 `SW_SHOWNOACTIVATE`，同样拉不回最小化窗口。
+- 修复：新增 `bridge/window_state.py`（是否需要恢复、ShowWindow 调用顺序）；`normalize_window` 在调整尺寸前先 `ShowWindow(SW_RESTORE/SW_SHOW)` 并等 1.2 秒；`send_text` 在首次 UIA 尝试前主动整理窗口；后台通道最小化时改用 `SW_RESTORE`。
+- 测试：`tests/test_window_state.py`(4)。
+
 ### 修复 · 她真刷了视频，但自己不知道、回答靠编
 
 - 原因：能力执行记录只有「看了 2 条视频，日记写了 N 字」，没记具体是哪几条、讲了什么；下一轮提示词里的「你最近做过的」没有事实，她只能编。

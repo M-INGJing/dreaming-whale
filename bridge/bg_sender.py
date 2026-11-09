@@ -129,6 +129,7 @@ MIN_ROW_W = 60
 #: 微信缩到托盘时主窗 visible=False，控件树直接是 1 个节点）。
 #: SW_SHOWNOACTIVATE 只显示、不抢前台，实测前后前台窗口号不变。
 SW_SHOWNOACTIVATE = 4
+SW_RESTORE = 9
 
 
 def _dpi_awareness():
@@ -394,10 +395,15 @@ def _ensure_tree(hwnd, log=None, unhide=True, want_edit=False):
         try:
             if (not user32.IsWindowVisible(hwnd)) or user32.IsIconic(hwnd):
                 fg0 = user32.GetForegroundWindow()
-                user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
+                # 最小化必须 SW_RESTORE；SW_SHOWNOACTIVATE 不会把窗口从最小化拉回来，
+                # UIA 树会一直是空壳（表现：切到会话了但没粘贴、发不出去）。
+                if user32.IsIconic(hwnd):
+                    user32.ShowWindow(hwnd, SW_RESTORE)
+                if not user32.IsWindowVisible(hwnd):
+                    user32.ShowWindow(hwnd, SW_SHOWNOACTIVATE)
                 time.sleep(TIMING["unhide"])
                 fg1 = user32.GetForegroundWindow()
-                log("后台通道：窗口原来隐藏/最小化，已用「显示但不激活」拉出来（前台 %s → %s%s）"
+                log("后台通道：窗口原来隐藏/最小化，已拉出来（前台 %s → %s%s）"
                     % (fg0, fg1, "，没抢" if fg0 == fg1 else "，**被抢了**"))
         except Exception as e:
             log("后台通道：显示窗口失败 %r" % (e,))
