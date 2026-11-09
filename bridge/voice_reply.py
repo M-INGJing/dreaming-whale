@@ -44,6 +44,88 @@ def _send_slot(lock, check):
 REQUEST = re.compile(r"(?:发|来|说|讲|回复)(?:给我|个|一条|一句|句|段|一段|条|一下|点|一段话|个回复|次|一)?\s*语音|用语音(?:回|说|讲)|语音(?:回我|回复|说一句)")
 NEGATIVE = re.compile(r"不要|别(?:再)?|不想|不用|不能|怎么|如何|他说|她说|有人说|关闭|取消|[\"“”‘’]")
 
+# ---- 语音文本清洗：颜文字/emoji/markdown 念出来会很怪，甚至让合成失败 ----
+ZERO_WIDTH = re.compile(r"[\u200b-\u200f\u202a-\u202e\ufeff]")
+# 常见 emoji / 符号区（保留中文标点）
+EMOJI = re.compile(
+    "["
+    "\U0001F000-\U0001FAFF"   # emoji 主体
+    "\U0001F1E6-\U0001F1FF"   # 国旗
+    "\u2600-\u27BF"           # 杂项符号/装饰
+    "\u2B00-\u2BFF"           # 箭头/星
+    "\uFE0F\u200D\u20E3"      # 变体选择符/ZWJ/键帽
+    "\u00A9\u00AE\u2122"      # ©®™
+    "]"
+)
+# markdown：**粗体**、*斜体*、`代码`、~~删除~~、[文字](url)、# 标题、> 引用
+MD_BOLD = re.compile(r"\*\*(.+?)\*\*|__(.+?)__", re.S)
+MD_ITALIC = re.compile(r"\*(.+?)\*|_(.+?)_", re.S)
+MD_CODE = re.compile(r"`([^`]*)`")
+MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+URL = re.compile(r"https?://\S+")
+HTML_TAG = re.compile(r"<[^>]{1,80}>")
+HEADING = re.compile(r"^\s{0,3}#{1,6}\s*", re.M)
+QUOTE = re.compile(r"^\s{0,3}>\s?", re.M)
+# 颜文字括号：括号里没有汉字、且带这些符号，就当表情删掉（保留（歪头）这种中文动作）
+KAO_BRACKET = re.compile(r"[（(]([^（）()]{1,24})[）)]")
+KAO_CHARS = set("°•̀́·ωﾟ▽△∇﹏﹃^~*-=+><`´｀oO0xXvV;:っ")
+# 常见 ASCII 表情/口头废话
+ASCII_FACE = re.compile(
+    r"[:;=8xX][-^']?[)(\]\[/\\|dDpP3]"
+    r"|[<>^][_\-]?[<>^]"
+    r"|[<>^][a-zA-Z]{1,2}[<>^]"
+    r"|<3+"
+    r"|qwq|QwQ|awa|owo|uwu|orz|OTZ|T_T|TAT|233+"
+)
+# 颜文字残留：阿拉伯/泰文/天城文/谚文兼容字母、组合附加符、半角浊点等
+RESIDUE = re.compile(
+    "[\u0300-\u036f\u0600-\u06ff\u0e00-\u0e7f\u0900-\u097f"
+    "\u0b80-\u0bff\u0c00-\u0c7f\u0d00-\u0d7f\u1100-\u11ff"
+    "\u3130-\u318f\ua960-\ua97f\ufe00-\ufe0f\uff9e\uff9f\u3099\u309a]"
+)
+CJK_SPACE = re.compile(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])")
+TILDE = re.compile(r"[~～]+")
+SPACES = re.compile(r"[ \t\u3000]{2,}")
+
+
+def _kao_bracket(match):
+    inner = match.group(1)
+    has_cjk = re.search(r"[\u4e00-\u9fff]", inner)
+    if has_cjk:
+        return match.group(0)  # 「（歪头）」这种保留
+    if any(ch in KAO_CHARS for ch in inner):
+        return ""
+    return match.group(0)
+
+
+def sanitize_for_speech(text):
+    """把要念出来的文本清干净：去 emoji/颜文字/markdown/链接，保留正常中文与标点。"""
+    value = str(text or "")
+    if not value.strip():
+        return ""
+    value = ZERO_WIDTH.sub("", value)
+    value = MD_LINK.sub(lambda m: m.group(1), value)
+    value = URL.sub("", value)
+    value = HTML_TAG.sub("", value)
+    value = MD_BOLD.sub(lambda m: m.group(1) or m.group(2) or "", value)
+    value = MD_ITALIC.sub(lambda m: m.group(1) or m.group(2) or "", value)
+    value = MD_CODE.sub(lambda m: m.group(1), value)
+    value = HEADING.sub("", value)
+    value = QUOTE.sub("", value)
+    value = KAO_BRACKET.sub(_kao_bracket, value)
+    value = ASCII_FACE.sub("", value)
+    value = EMOJI.sub("", value)
+    value = RESIDUE.sub("", value)
+    value = TILDE.sub("", value)
+    # 删完留下的空括号/空引号
+    value = re.sub(r"[（(]\s*[）)]|\[\s*\]|【\s*】", "", value)
+    value = SPACES.sub(" ", value)
+    value = CJK_SPACE.sub("", value)
+    value = re.sub(r"\s+([，。！？、；：])", r"\1", value)
+    value = re.sub(r"([，。！？、；：])\s+", r"\1", value)
+    value = value.strip(" \t，、；：")
+    return value.strip()
+
 def requested(text):
     text = str(text or "")
     return len(text) <= 500 and not NEGATIVE.search(text) and bool(REQUEST.search(text))
@@ -95,6 +177,16 @@ def deliver(root, text, hwnd, prepare, log, allow_foreground=None, cancelled=Non
         if outcome is not None:
             outcome.update(Status="failed", Error="语音发送未启用或已取消")
         return False
+    # 语音合成前先洗文本：颜文字/emoji/markdown 念出来会很怪，甚至让合成异常
+    original = str(text or "")
+    text = sanitize_for_speech(original)
+    if not text:
+        log("自动语音：文本清洗后为空（原文 %d 字），回退文字" % len(original))
+        if outcome is not None:
+            outcome.update(Status="failed", Error="要念的内容只有表情/符号，已回退文字")
+        return False
+    if text != original:
+        log("自动语音：已清洗文本 %d 字 → %d 字（去颜文字/emoji/markdown）" % (len(original), len(text)))
     with _health_lock:
         remaining = _health.get(root, (0, 0))[1] - time.monotonic()
     if remaining > 0:

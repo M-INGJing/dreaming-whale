@@ -77,6 +77,12 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 语音回复里带颜文字/emoji 导致念出来很怪
+
+- 合成前新增 `voice_reply.sanitize_for_speech()`：去颜文字（含残留的阿拉伯/泰文/谚文符号）、emoji、markdown、链接、零宽字符，合并多余空格；保留「（歪头）」这类中文动作。
+- 清洗后为空（只有表情/符号）就回退文字，不硬合成；清洗发生时会记一行「x 字 → y 字」。
+- 新增 `tests/test_voice_speech_text.py`(7)：颜文字、emoji、markdown/链接、ASCII 表情、中文括号保留、纯符号、标点空格。
+
 ### 修复 · 鲸鲸不记得自己发过 B 站分享
 
 - 原因：分享由桥接直接从队列发出，内核记忆里没有这条消息，所以她被问「你是不是给我发了个视频」时会答「没有」。
