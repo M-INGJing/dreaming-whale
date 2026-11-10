@@ -120,6 +120,13 @@ const REGISTRY = [
     desc: '开启后每条回复都带「引用原消息」，视觉上更清楚，但每条要多走一遍 UI，实测慢好几秒。',
     default: false,
   },
+  {
+    key: 'drift',
+    path: 'features.drift',
+    label: '人格漂移监测（每天自动分析）',
+    desc: '默认开启。每天读一次本地聊天记录，按天统计回复长度 / emoji / 问句 / AI 味 / 复读，超健康区间在日志里提示，结果写 data/drift.json。纯本地文件分析，不联网、不调模型。关掉 = 不自动分析，仍可手动跑 scripts/drift.js。',
+    default: true,
+  },
 ];
 
 const BY_KEY = new Map(REGISTRY.map((f) => [f.key, f]));

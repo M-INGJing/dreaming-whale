@@ -217,6 +217,14 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
   } catch (err) {
     logger.warn('日记闲时更新启动失败（不影响聊天）：' + describeError(err));
   }
+  // 人格漂移监测：每天读一次本地聊天记录，超健康区间在日志里提示（开关 features.drift，默认开）
+  try {
+    const { createDriftScheduler } = require('./services/driftScheduler');
+    runtime.driftScheduler = createDriftScheduler({ runtime, logger: child('drift') });
+    runtime.driftScheduler.start();
+  } catch (err) {
+    logger.warn('漂移监测启动失败（不影响聊天）：' + describeError(err));
+  }
   // 能力执行：她在回复里写 [[cap:id]]，内核在后台替她做（逛 B 站 / 写日记…）
   try {
     const capabilities = require('./services/capabilities');

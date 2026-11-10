@@ -271,6 +271,8 @@ const DEFAULT_CONFIG = {
     memorySnapshot: true,
     // 群聊关系加载（A 提到 B）：默认开，可在「实验开关」里关
     relations: true,
+    // 人格漂移监测：每天自动分析一次，超健康区间在日志里提示（纯本地，不联网不调模型）
+    drift: true,
   },
 
   storage: {
