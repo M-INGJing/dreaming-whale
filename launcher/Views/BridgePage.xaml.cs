@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace WhaleLauncher.Views
@@ -254,6 +255,7 @@ namespace WhaleLauncher.Views
 
         private void UpdatePerm(Snapshot s)
         {
+            UpdateSteps(s);
             if (!s.NodeUp)
             {
                 PermLine.Text = "内核没起，读不到权限信息。";
@@ -273,6 +275,54 @@ namespace WhaleLauncher.Views
             PermLine.Text = sb.ToString();
             PermLine.ToolTip = sb.ToString();
             UpdateStat();
+        }
+
+        /// <summary>
+        /// 三步链路：找账号 → 连数据库（收消息线程）→ 窗口可用（UIA 发送通道）。
+        /// 前一步没成就把后面的步骤标成「还没轮到」而不是失败——否则一次故障会同时红三格，
+        /// 反而看不出真正卡在哪一步。
+        /// </summary>
+        private void UpdateSteps(Snapshot s)
+        {
+            if (Step1Dot == null) return;
+
+            // 1 账号确认：这一步失败最有诊断价值，带上原因
+            if (!s.BrOnline) SetStep(Step1Dot, Step1Title, Step1Hint, 0, "等桥接连上");
+            else if (s.BrAccountOk)
+            {
+                var who = string.IsNullOrEmpty(s.BrAccountNick) ? s.BrAccount : s.BrAccountNick;
+                SetStep(Step1Dot, Step1Title, Step1Hint, 2, string.IsNullOrEmpty(who) ? "已确认" : "已确认：" + who);
+            }
+            else SetStep(Step1Dot, Step1Title, Step1Hint, 1,
+                string.IsNullOrEmpty(s.BrAccountWhy) ? "还没确认" : ClipText(s.BrAccountWhy));
+
+            // 2 数据库 / 收消息线程
+            if (!s.BrOnline || !s.BrAccountOk) SetStep(Step2Dot, Step2Title, Step2Hint, 0, "等账号确认");
+            else if (s.BrListener) SetStep(Step2Dot, Step2Title, Step2Hint, 2, "在收消息");
+            else SetStep(Step2Dot, Step2Title, Step2Hint, 1, "收消息线程停了");
+
+            // 3 窗口 / UIA：拿不到 UIA 不等于发不出去（后台通道兜底），所以用黄色而不是红色
+            if (!s.BrOnline || !s.BrListener) SetStep(Step3Dot, Step3Title, Step3Hint, 0, "等收消息就绪");
+            else if (s.BrUia) SetStep(Step3Dot, Step3Title, Step3Hint, 2, "UIA 正常，走快通道");
+            else SetStep(Step3Dot, Step3Title, Step3Hint, 1, "UIA 拿不到，走后台通道", "Warn");
+        }
+
+        /// <summary>state：0 还没轮到 / 1 没成 / 2 成了。</summary>
+        /// <remarks>Ellipse 用全限定名：本文件到处在用 System.IO.Path，不能再引入 System.Windows.Shapes。</remarks>
+        private void SetStep(System.Windows.Shapes.Ellipse dot, TextBlock title, TextBlock hint,
+                             int state, string text, string failBrush = "Bad")
+        {
+            dot.Fill = (Brush)FindResource(state == 2 ? "Ok" : state == 1 ? failBrush : "Idle");
+            title.Foreground = (Brush)FindResource(state == 2 ? "Text" : state == 1 ? failBrush : "Muted");
+            hint.Text = text;
+            hint.Foreground = (Brush)FindResource(state == 1 ? failBrush : "Dim");
+            hint.ToolTip = text;
+        }
+
+        private static string ClipText(string raw)
+        {
+            var t = (raw ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return t.Length <= 34 ? t : t.Substring(0, 33) + "…";
         }
 
         private async Task LoadAccountsAsync(Snapshot s)

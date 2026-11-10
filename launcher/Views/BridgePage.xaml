@@ -45,6 +45,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" MinHeight="180" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -58,8 +59,57 @@
             </StackPanel>
         </DockPanel>
 
+        <!-- 三步链路：找账号 → 连数据库 → 起窗口。哪一步没成，一眼能看见 -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Padding="16,12" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="Step1Dot" Width="8" Height="8" Fill="{DynamicResource Idle}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="Step1Title" Text="找到账号" FontSize="12.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Text}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="Step1Hint" Text="—" Style="{StaticResource Small}" Margin="16,4,0,0"
+                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Border Grid.Column="1" Width="28" Height="1" Background="{DynamicResource Line}"
+                        VerticalAlignment="Center" Margin="10,0" />
+
+                <StackPanel Grid.Column="2">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="Step2Dot" Width="8" Height="8" Fill="{DynamicResource Idle}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="Step2Title" Text="连上数据库" FontSize="12.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Text}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="Step2Hint" Text="—" Style="{StaticResource Small}" Margin="16,4,0,0"
+                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Border Grid.Column="3" Width="28" Height="1" Background="{DynamicResource Line}"
+                        VerticalAlignment="Center" Margin="10,0" />
+
+                <StackPanel Grid.Column="4">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="Step3Dot" Width="8" Height="8" Fill="{DynamicResource Idle}" VerticalAlignment="Center" />
+                        <TextBlock x:Name="Step3Title" Text="窗口可用" FontSize="12.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Text}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock x:Name="Step3Hint" Text="—" Style="{StaticResource Small}" Margin="16,4,0,0"
+                               TextWrapping="Wrap" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- 上半：微信设置（固定高度，不再滚动，内容一屏放完） -->
-        <StackPanel Grid.Row="1">
+        <StackPanel Grid.Row="2">
                 <Grid Margin="0,0,0,5">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -136,7 +186,7 @@
         </StackPanel>
 
         <!-- 下半：桥接控制台 -->
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="0">
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
             <DockPanel>
                 <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="10,7">
                     <DockPanel LastChildFill="False">
@@ -216,7 +266,7 @@
         </Border>
 
         <!-- 控制台状态条 -->
-        <DockPanel Grid.Row="3" Margin="0,6,0,0" LastChildFill="False">
+        <DockPanel Grid.Row="4" Margin="0,6,0,0" LastChildFill="False">
             <TextBlock x:Name="ConsoleStat" DockPanel.Dock="Left" Style="{StaticResource Small}" VerticalAlignment="Center" />
             <Button x:Name="BtnOpenBridgeLog" DockPanel.Dock="Right" Content="打开日志文件" Style="{StaticResource TopBtn}"
                     HorizontalAlignment="Right" Click="OnOpenBridgeLog" />
