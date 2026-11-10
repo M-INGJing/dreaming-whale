@@ -49,3 +49,21 @@ test('collectDay：没有 store / 今天没聊天时返回空', () => {
   const runtime = { store: storeOf({ 'wechat:u:wxid_a': [{ role: 'user', name: 'A', text: '旧消息', ts: yesterday }] }) };
   assert.equal(chatDigest.collectDay(runtime, today).text, '');
 });
+
+test('collectDay：带上「关于 TA」的记忆沉淀（人物卡 notes）', () => {
+  const runtime = {
+    store: {
+      sessions: new Map([
+        ['wechat:u:wxid_a', {
+          title: '',
+          profiles: { u1: { name: '小明', nickname: '小明', notes: ['喜欢猫', '不吃香菜'] } },
+        }],
+      ]),
+      messages: (key) => [{ role: 'user', name: '小明', text: '今天好累', ts: start + 1000 }],
+    },
+  };
+  const out = chatDigest.collectDay(runtime, today);
+  assert.match(out.text, /关于小明/);
+  assert.match(out.text, /喜欢猫/);
+  assert.match(out.text, /不吃香菜/);
+});

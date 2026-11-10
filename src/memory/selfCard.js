@@ -104,4 +104,21 @@ function applyWeekly(config, { likes = [], dislikes = [], state = '', summary = 
   return save(config, card);
 }
 
-module.exports = { empty, load, save, upsert, applyWeekly, fileFor, MAX_PREFS, MAX_EVENTS };
+/**
+ * 拼成提示词那一块（P2：SelfCard 作为「动态人设层」，让她越聊越有自己的性子）。
+ * 空卡（没有偏好、没有近况）返回 ''。
+ */
+function blockFor(config) {
+  const card = load(config);
+  const likes = card.preferences.filter((p) => p.kind === 'like').map((p) => p.text).slice(0, 6);
+  const dislikes = card.preferences.filter((p) => p.kind === 'dislike').map((p) => p.text).slice(0, 6);
+  if (!likes.length && !dislikes.length && !card.state) return '';
+  const lines = ['【我（鲸鲸）自己记下的长期偏好】'];
+  if (likes.length) lines.push('更喜欢：' + likes.join('、'));
+  if (dislikes.length) lines.push('不太想碰：' + dislikes.join('、'));
+  if (card.state) lines.push('近况：' + card.state);
+  lines.push('这些是你自己慢慢积累的偏好，聊到相关话题时自然流露一点，别念出来、别每句都提。');
+  return lines.join('\n');
+}
+
+module.exports = { empty, load, save, upsert, applyWeekly, blockFor, fileFor, MAX_PREFS, MAX_EVENTS };

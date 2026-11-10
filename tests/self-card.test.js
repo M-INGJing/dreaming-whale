@@ -58,3 +58,15 @@ test('upsert：超过上限按 updatedAt 最旧先丢', () => {
   assert.equal(list[0].text, '偏好5', '最旧的 0~4 被挤掉');
   assert.equal(list[list.length - 1].text, '偏好' + (selfCard.MAX_PREFS + 4));
 });
+
+test('blockFor：有偏好/近况时拼成底色块，空卡返回空串', () => {
+  const { config, root } = tmpConfig();
+  assert.equal(selfCard.blockFor(config), '');
+  selfCard.applyWeekly(config, { likes: ['猫'], dislikes: ['吵架'], state: '有点累', summary: '这周挺好。', weekStart: '2026-11-08' });
+  const block = selfCard.blockFor(config);
+  assert.match(block, /长期偏好/);
+  assert.match(block, /更喜欢：猫/);
+  assert.match(block, /不太想碰：吵架/);
+  assert.match(block, /近况：有点累/);
+  fs.rmSync(root, { recursive: true, force: true });
+});

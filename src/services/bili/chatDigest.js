@@ -64,6 +64,16 @@ function collectDay(runtime, date = new Date(), opts = {}) {
         messages += 1;
       }
       if (!lines.length) continue;
+      // 记忆沉淀：让日记看到的不仅是零碎原话，还有「关于 TA」的长期偏好/事实（人物卡里的 notes）
+      const view = store.sessions.get(key);
+      const profiles = view && view.profiles;
+      if (profiles) {
+        for (const p of Object.values(profiles)) {
+          const notes = (Array.isArray(p.notes) ? p.notes : []).filter(Boolean);
+          if (!notes.length) continue;
+          lines.push('（关于' + clip(p.nickname || p.name || 'TA', 10) + '：' + notes.slice(0, 2).join('；') + '）');
+        }
+      }
       blocks.push('【' + labelOf(key, rows[0]) + '】' + lines.join(' / '));
       chats += 1;
       if (chats >= maxChats) break;

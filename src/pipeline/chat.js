@@ -44,6 +44,7 @@ const voiceReply = require('../core/voiceReply');
 const envInfo = require('../services/envInfo');
 const { LIMITS } = require('../memory/constants');
 const tokenCalibration = require('../memory/calibration');
+const selfCard = require('../memory/selfCard');
 const budgetPricing = require('../services/budget');
 
 /**
@@ -948,14 +949,15 @@ class Bot {
       capabilities.recentBlock(this.config, now),
       turnState.bridgeLine,
     ].filter(Boolean).join('\n');
-    // 记忆块 = 人物卡/事件/摘要 + 关系卡 + B 站块（日记摘要 / 评论区说话习惯，都可为空）
+    // 记忆块 = 人物卡/事件/摘要 + 关系卡 + 她自己记下的长期偏好（SelfCard）+ B 站块（都可为空）
     let biliBlock = '';
     try {
       biliBlock = biliChat.blocks(this.config, clean.text, new Date(nowMs));
     } catch (err) {
       this.logger?.warn('[bili] 注入失败 ' + describeError(err));
     }
-    const memoryBlock = [mem.block, mem.relationsBlock, biliBlock].filter(Boolean).join('\n\n');
+    const selfBlock = selfCard.blockFor(this.config);
+    const memoryBlock = [mem.block, mem.relationsBlock, selfBlock, biliBlock].filter(Boolean).join('\n\n');
     const turns = this.buildTurns({ ...msg, ts: nowMs }, historyForTurns, memoryBlock, tail);
 
     // 预算：system 只测量，不裁剪；dialogueBudget 默认 5,500，给裁剪窗口用。
