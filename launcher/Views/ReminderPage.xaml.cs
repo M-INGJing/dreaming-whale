@@ -114,13 +114,14 @@ namespace WhaleLauncher.Views
                 ReminderList.ItemsSource = rows;
                 if (rows.Count == 0)
                 {
-                    EmptyText.Text = "还没有提醒";
+                    EmptyText.Text = "还没有提醒。在微信里跟她说「十点半提醒我开会」，这里就会出现一条。";
                     EmptyText.Foreground = (Brush)FindResource("Dim");
-                    EmptyText.Visibility = Visibility.Visible;
+                    EmptyArt.Visibility = Visibility.Visible;
+                    EmptyBox.Visibility = Visibility.Visible;
                 }
                 else
                 {
-                    EmptyText.Visibility = Visibility.Collapsed;
+                    EmptyBox.Visibility = Visibility.Collapsed;
                 }
                 LoadRules(res.Prop("rules"), full || !_formsLoaded);
                 if (full || !_formsLoaded) await LoadCareAsync();   // 周期刷新不碰表单，免得覆盖正在编辑的值（M30）
@@ -333,7 +334,9 @@ namespace WhaleLauncher.Views
             ReminderList.ItemsSource = null;
             EmptyText.Text = text ?? "";
             EmptyText.Foreground = error ? (Brush)FindResource("Bad") : (Brush)FindResource("Dim");
-            EmptyText.Visibility = Visibility.Visible;
+            // 出错时只留一句红字：插画会让人以为「只是还没有提醒」
+            EmptyArt.Visibility = error ? Visibility.Collapsed : Visibility.Visible;
+            EmptyBox.Visibility = Visibility.Visible;
             StatusText.Text = error ? "刷新失败" : "";
         }
 
