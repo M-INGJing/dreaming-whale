@@ -69,6 +69,15 @@
             <StackPanel x:Name="SectionsHost" Margin="0,0,10,0" />
         </ScrollViewer>
 
+        <!-- 吸顶分组标题：某个分区的标题被顶出视野后，把它贴在顶部。
+             单层方案——不复制卡片，也不做上下两层叠加，只显示当前所在分区的名字。 -->
+        <Border x:Name="StickyHeader" Grid.Row="0" VerticalAlignment="Top" Visibility="Collapsed"
+                Background="{DynamicResource BgTop}" BorderBrush="{DynamicResource Line}"
+                BorderThickness="0,0,0,1" Padding="0,4,0,8" Margin="0,0,10,0"
+                IsHitTestVisible="False" Panel.ZIndex="5">
+            <TextBlock x:Name="StickyTitle" Style="{StaticResource H2}" />
+        </Border>
+
         <!-- 状态行放底部：不再占侧栏 -->
         <StackPanel Grid.Row="1" Margin="0,10,0,0">
             <TextBlock x:Name="KernelHint" Style="{StaticResource Small}" TextWrapping="Wrap" />

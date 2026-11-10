@@ -47,6 +47,8 @@ namespace WhaleLauncher.Views
     {
         private readonly RuntimeSupervisor _sup;
         private readonly Dictionary<string, Action<JsonElement>> _loaders = new Dictionary<string, Action<JsonElement>>();
+        /// <summary>每个分区的卡片和它的标题，吸顶条靠这两个东西算「现在在哪个分组」。</summary>
+        private readonly List<(Border Card, TextBlock Title)> _sections = new();
         private Action<JsonElement, Dictionary<string, JsonElement>> _loadModel;
         private Action<JsonElement> _loadVision;
         private Dictionary<string, JsonElement> _providers;
@@ -60,6 +62,7 @@ namespace WhaleLauncher.Views
             InitializeComponent();
             _sup = sup;
             BuildOnce();
+            MainScroll.ScrollChanged += (_, __) => UpdateSticky();
             Loaded += async (_, __) =>
             {
                 MainScroll.ScrollToTop();
@@ -116,6 +119,7 @@ namespace WhaleLauncher.Views
         private void BuildOnce()
         {
             SectionsHost.Children.Clear();
+            _sections.Clear();
 
             AddSection(BuildModelSection());
             AddSection(BuildAdvancedSection());
@@ -127,6 +131,32 @@ namespace WhaleLauncher.Views
         {
             card.Margin = new Thickness(0, 0, 0, 14);
             SectionsHost.Children.Add(card);
+            // 吸顶标题要用到每个分区的标题文字和它的纵向位置，构建时先记下来
+            if (card.Child is StackPanel stack && stack.Children.OfType<TextBlock>().FirstOrDefault() is { } title)
+                _sections.Add((card, title));
+            UpdateSticky();
+        }
+
+        /// <summary>
+        /// 单层吸顶：算出「当前滚到哪个分区」，把它贴到顶部。
+        /// 不做上下两层交接动画——设置页不需要那种精致，只要滚到哪儿知道自己在哪个分组就够了。
+        /// </summary>
+        private void UpdateSticky()
+        {
+            if (StickyHeader == null || _sections.Count == 0) return;
+            var offset = MainScroll.VerticalOffset;
+            TextBlock current = null;
+            foreach (var (_, title) in _sections)
+            {
+                if (title.TranslatePoint(new Point(0, 0), SectionsHost).Y <= offset + 1) current = title;
+            }
+            if (current == null || offset < 4)
+            {
+                StickyHeader.Visibility = Visibility.Collapsed;
+                return;
+            }
+            StickyTitle.Text = current.Text;
+            StickyHeader.Visibility = Visibility.Visible;
         }
 
         /// <summary>

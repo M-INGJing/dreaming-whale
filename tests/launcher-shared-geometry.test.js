@@ -46,3 +46,15 @@ test('三个空态都引用共享资源', () => {
     assert.ok(text.includes('{StaticResource WhaleTail}'), name + ' 没有引用 WhaleTail');
   }
 });
+
+test('Views 下的图片资源必须用程序集绝对路径', () => {
+  // 相对 URI 会按这份 XAML 自己的位置解析：Views/PersonaPage.xaml + "Assets/app.png"
+  // → views/Assets/app.png，运行期抛「Cannot locate resource」，而编译期完全不报错。
+  for (const f of files) {
+    if (!/[\\/]Views[\\/]/.test(f)) continue;
+    const text = fs.readFileSync(f, 'utf8');
+    const re = /ImageSource="(?!\/|pack:|http|\{)[^"]*"/g;
+    const bad = text.match(re) || [];
+    assert.deepStrictEqual(bad, [], path.basename(f) + ' 里的 ImageSource 没加前导斜杠：' + bad.join(', '));
+  }
+});

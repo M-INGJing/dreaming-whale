@@ -30,7 +30,8 @@
                 <StackPanel>
                     <Ellipse Width="72" Height="72" HorizontalAlignment="Center">
                         <Ellipse.Fill>
-                            <ImageBrush ImageSource="Assets/app.png" Stretch="UniformToFill" />
+                            <!-- 必须带前导斜杠：相对 URI 会按这份 XAML 的位置解析成 views/Assets/app.png -->
+                            <ImageBrush ImageSource="/Assets/app.png" Stretch="UniformToFill" />
                         </Ellipse.Fill>
                     </Ellipse>
                     <TextBlock x:Name="CardName" Text="鲸鲸" FontSize="15" FontWeight="SemiBold"
