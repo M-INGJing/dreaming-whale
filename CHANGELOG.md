@@ -2,6 +2,14 @@
 
 ## 4.0.8
 
+### 改进 · few-shot 示例改从真实对话抽样
+
+- 新增 `src/persona/fewShot.js`：从 `data/memory/chats/*/messages.jsonl` 抽「主人没纠正过」的回复当说话示例，替代硬编码那 4 组。
+- 「没纠正」的判断：回复后面紧接着的 user 消息不是纠正语（「别说 / 重说 / 换个说法…」），或后面没有下一句。
+- 质量门槛：回复 4–60 字、无 AI 味、无 `[[cap]]`/`[[sticker]]` 标记、无 10 位以上连续数字。
+- 抽不到自动回退硬编码示例；结果按 dataDir 缓存（few-shot 是静态前缀的一部分，进程内必须稳定）。
+- `buildLegacySystem`（回滚路径）不动，仍是硬编码示例。
+
 ### 新增 · 人格漂移监测定时分析
 
 - 新增 `src/services/driftScheduler.js`：每天自动跑一次人格漂移分析（回复长度 / emoji / 问句 / AI 味 / 复读），超健康区间在日志里提示，结果写 `data/drift.json`。

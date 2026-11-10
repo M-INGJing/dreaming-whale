@@ -6,6 +6,7 @@ const features = require('../infra/features');
 const stickers = require('../adapters/stickers');
 const actionEvents = require('../core/events');
 const { LIMITS } = require('../memory/constants');
+const fewShot = require('./fewShot');
 
 /**
  * 鲸鲸的人设：系统提示词、心情、演示模式台词、消息切分。
@@ -905,7 +906,10 @@ function buildBlocks({ config, msg = {}, profile, notes = [], noteReminders = []
   // ── 对两种人设都生效 ──
   statics.push(speakingLines().join('\n'));
   statics.push(antiAiLines().join('\n'));
-  if (stylePreset !== '抽象') statics.push(exampleLines().join('\n'));
+  if (stylePreset !== '抽象') {
+    // 优先用真实对话里「主人没纠正过」的回复当示例；抽不到就回退硬编码那 4 组
+    statics.push((fewShot.sample(config) || exampleLines()).join('\n'));
+  }
   const style = styleLines(config);
   if (style.length) statics.push(style.slice(1).join('\n'));
   if (stylePreset === '抽象') statics.push(abstractLines().slice(1).join('\n'));
