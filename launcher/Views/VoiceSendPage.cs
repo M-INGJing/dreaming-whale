@@ -25,6 +25,8 @@ public sealed class VoiceSendPage : UserControl
     readonly TextBlock providerHint=new(){TextWrapping=TextWrapping.Wrap};
     readonly CheckBox groups=new(){Content="群聊",IsChecked=true},privates=new(){Content="私聊",IsChecked=true};
     readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap};
+    readonly System.Windows.Shapes.Ellipse readyDot=new(){Width=8,Height=8,VerticalAlignment=VerticalAlignment.Center};
+    readonly TextBlock readyText=new(){Text="语音回复关着",Margin=new Thickness(8,0,0,0),VerticalAlignment=VerticalAlignment.Center};
     readonly TextBlock keyStatus=new(){TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed},testStatus=new(){TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed};
     readonly string root,file;
     string providerId="breezeblue";
@@ -76,7 +78,18 @@ public sealed class VoiceSendPage : UserControl
         var gate=new Border{Padding=new Thickness(16,12,16,12),Margin=new Thickness(0,0,0,12)};
         gate.SetResourceReference(StyleProperty,"Card");
         var gateBody=new StackPanel();gate.Child=gateBody;
+
+        // 设备状态条：开了却没选对声卡是最常见的坑（选成扬声器，语音就从喇叭念出来），
+        // 所以把结论写在开关上面，而不是埋在下面一长串设置里
+        var readyRow=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)};
+        readyRow.Children.Add(readyDot);
+        readyText.SetResourceReference(StyleProperty,"Small");
+        readyRow.Children.Add(readyText);
+        gateBody.Children.Add(readyRow);
+        devices.SelectionChanged+=(_,_)=>UpdateReady();
+
         experimental.SetResourceReference(StyleProperty,"DarkCheck");
+        experimental.Click+=(_,_)=>UpdateReady();
         gateBody.Children.Add(experimental);
         gateBody.Children.Add(Note("把正常回复转成语音：按概率自动发，或者响应对方明确要的语音。关掉开关会立刻停止新的语音任务，已经发出去的消息不会撤回。"));
         body.Children.Add(gate);
@@ -344,11 +357,34 @@ public sealed class VoiceSendPage : UserControl
     }
     void RefreshDevices()
     {
-        if(experimental.IsChecked!=true)return;
+        if(experimental.IsChecked!=true){UpdateReady();return;}
         var selected=(devices.SelectedItem as Device)?.Id;
         using var e=new MMDeviceEnumerator();
         devices.ItemsSource=e.EnumerateAudioEndPoints(DataFlow.Render,DeviceState.Active).Select(d=>{var item=new Device(d.ID,d.FriendlyName);d.Dispose();return item;}).ToArray();
         devices.SelectedItem=devices.Items.Cast<Device>().FirstOrDefault(d=>d.Id==selected);
+        UpdateReady();
+    }
+
+    /// <summary>
+    /// 语音发送的就绪状态：没开 / 没选设备 / 选错设备 / 就绪。
+    /// 「选错」特指选成扬声器——这是实测最常见的失败原因，语音会从喇叭放出来而不是喂给微信。
+    /// </summary>
+    void UpdateReady()
+    {
+        if(readyText==null||readyDot==null)return;
+        string text,brush;
+        var dev=devices.SelectedItem as Device;
+        if(experimental.IsChecked!=true){text="语音回复关着，开了才会合成和发送";brush="Idle";}
+        else if(dev==null){text="开了，但还没选输出设备";brush="Warn";}
+        else if(dev.Name.IndexOf("CABLE",StringComparison.OrdinalIgnoreCase)<0)
+        {
+            text="选的是「"+dev.Name+"」，不是 VB-CABLE：语音会从喇叭放出来";
+            brush="Warn";
+        }
+        else {text="设备就绪："+dev.Name;brush="Ok";}
+        readyText.Text=text;
+        readyText.SetResourceReference(TextBlock.ForegroundProperty,brush=="Ok"?"Dim":brush);
+        readyDot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty,brush);
     }
     void Load()
     {
@@ -369,6 +405,7 @@ public sealed class VoiceSendPage : UserControl
         }
         catch{saved=new();experimental.IsChecked=false;panel.Visibility=Visibility.Collapsed;}
         finally{loading=false;}
+        UpdateReady();
     }
     void Save()
     {

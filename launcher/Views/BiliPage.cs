@@ -175,6 +175,17 @@ public sealed class BiliPage : UserControl, IRefreshable
         panel.Children.Add(cfgCard);
         var cfgInner = (StackPanel)cfgCard.Child;
         AddRow(cfgInner, "作息窗口", windowsBox);
+
+        // 24 小时作息条：窗口是纯文本写法，光看字符串判断不了「现在到底在不在窗口里」。
+        // 每分钟重画一次，让「现在几点」那根针不会停在打开页面那一刻。
+        var clock = BuildClockBar();
+        cfgInner.Children.Add(clock);
+        var clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        clockTimer.Tick += (_, _) => PaintClock(clock);
+        clockTimer.Start();
+        Unloaded += (_, _) => clockTimer.Stop();
+        windowsBox.TextChanged += (_, _) => PaintClock(clock);
+        PaintClock(clock);
         var numRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         numRow.Children.Add(Note("开摆概率"));
         numRow.Children.Add(skipBox);
@@ -359,8 +370,100 @@ public sealed class BiliPage : UserControl, IRefreshable
     static int ParseInt(string text, int fallback)
         => int.TryParse((text ?? "").Trim(), out var n) ? n : fallback;
 
-    static List<Dictionary<string, object>> ParseWindows(string text)
+    /// <summary>24 小时条：96 格（每格 15 分钟），作息窗口按时间填色，最后一根针是「现在」。</summary>
+    Grid BuildClockBar()
     {
+        var wrap = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        wrap.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        wrap.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var bar = new Grid { Height = 12 };
+        for (var i = 0; i < 96; i++)
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        wrap.Tag = bar;
+        wrap.Children.Add(bar);
+
+        var labels = new Grid { Margin = new Thickness(0, 3, 0, 0) };
+        labels.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        labels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        labels.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        labels.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        labels.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        AddClockLabel(labels, "00:00", 0, HorizontalAlignment.Left);
+        AddClockLabel(labels, "12:00", 2, HorizontalAlignment.Center);
+        AddClockLabel(labels, "24:00", 4, HorizontalAlignment.Right);
+        Grid.SetRow(labels, 1);
+        wrap.Children.Add(labels);
+        return wrap;
+    }
+
+    static void AddClockLabel(Grid host, string text, int column, HorizontalAlignment align)
+    {
+        var t = new TextBlock { Text = text, HorizontalAlignment = align };
+        t.SetResourceReference(StyleProperty, "Small");
+        Grid.SetColumn(t, column);
+        host.Children.Add(t);
+    }
+
+    void PaintClock(Grid wrap)
+    {
+        if (wrap.Tag is not Grid bar) return;
+        bar.Children.Clear();
+
+        var track = new Border { CornerRadius = new CornerRadius(6) };
+        track.SetResourceReference(Border.BackgroundProperty, "LineSoft");
+        Grid.SetColumnSpan(track, 96);
+        bar.Children.Add(track);
+
+        foreach (var w in ParseWindows(windowsBox.Text))
+        {
+            var s = ClockMinutes(w["start"] as string);
+            var e = ClockMinutes(w["end"] as string);
+            if (s < 0 || e < 0 || e <= s) continue;
+            var from = Math.Clamp(s / 15, 0, 95);
+            var to = Math.Clamp((e + 14) / 15, from + 1, 96);
+            var seg = new Border { CornerRadius = new CornerRadius(6) };
+            seg.SetResourceReference(Border.BackgroundProperty, "Accent");
+            Grid.SetColumn(seg, from);
+            Grid.SetColumnSpan(seg, to - from);
+            bar.Children.Add(seg);
+        }
+
+        var now = DateTime.Now;
+        var mark = new Border { Width = 2, CornerRadius = new CornerRadius(1), HorizontalAlignment = HorizontalAlignment.Center };
+        mark.SetResourceReference(Border.BackgroundProperty, "Text");
+        Grid.SetColumn(mark, Math.Clamp((now.Hour * 60 + now.Minute) / 15, 0, 95));
+        bar.Children.Add(mark);
+
+        bar.ToolTip = DescribeWindows();
+    }
+
+    /// <summary>画不出合法窗口时要说清楚「她不会自己醒」，别让人以为条子空着是加载中。</summary>
+    string DescribeWindows()
+    {
+        var parts = new List<string>();
+        foreach (var w in ParseWindows(windowsBox.Text))
+        {
+            var s = ClockMinutes(w["start"] as string);
+            var e = ClockMinutes(w["end"] as string);
+            if (s < 0 || e < 0 || e <= s) continue;
+            parts.Add(ClockText(s) + "-" + ClockText(e));
+        }
+        return parts.Count == 0 ? "没有有效作息窗口：她不会自己醒" : "作息：" + string.Join("，", parts);
+    }
+
+    static string ClockText(int minutes) => (minutes / 60).ToString("00") + ":" + (minutes % 60).ToString("00");
+
+    static int ClockMinutes(string raw)
+    {
+        var bits = (raw ?? "").Trim().Replace('：', ':').Split(':');
+        if (bits.Length != 2) return -1;
+        if (!int.TryParse(bits[0], out var h) || !int.TryParse(bits[1], out var m)) return -1;
+        if (h < 0 || h > 24 || m < 0 || m > 59) return -1;
+        return h * 60 + m;
+    }
+
+    static List<Dictionary<string, object>> ParseWindows(string text)    {
         var list = new List<Dictionary<string, object>>();
         foreach (var part in (text ?? "").Split(new[] { ',', '，', ';', '；' }, StringSplitOptions.RemoveEmptyEntries))
         {
