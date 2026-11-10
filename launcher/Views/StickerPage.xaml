@@ -112,7 +112,7 @@
                 </ScrollViewer>
                 <!-- 空态：和状态页同一套语言（鲸尾 + 一句人话），不再只有一行灰字 -->
                 <StackPanel x:Name="EmptyBox" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="380">
-                    <Path Data="M3 13c4.6-.3 7.7-2.8 9-7.7 1.3 4.9 4.4 7.4 9 7.7-1.3-5.2-4.9-8.6-9-8.6S4.3 7.8 3 13Z"
+                    <Path Data="{StaticResource WhaleTail}"
                           Stroke="{DynamicResource Accent}" StrokeThickness="1.1" Opacity="0.5"
                           Width="84" Height="40" Stretch="Uniform" HorizontalAlignment="Center" />
                     <TextBlock x:Name="EmptyHint" Style="{StaticResource Small}" HorizontalAlignment="Center"

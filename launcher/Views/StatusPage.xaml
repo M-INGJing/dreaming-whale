@@ -145,7 +145,7 @@
 
                     <!-- 空态三段式：插画 + 一句人话。RecentEmpty 仍是 TextBlock（代码会改它的 Text） -->
                     <StackPanel x:Name="RecentEmptyBox" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Path Data="M3 13c4.6-.3 7.7-2.8 9-7.7 1.3 4.9 4.4 7.4 9 7.7-1.3-5.2-4.9-8.6-9-8.6S4.3 7.8 3 13Z"
+                        <Path Data="{StaticResource WhaleTail}"
                               Stroke="{DynamicResource Accent}" StrokeThickness="1.1" Opacity="0.5"
                               Width="84" Height="40" Stretch="Uniform" HorizontalAlignment="Center" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">

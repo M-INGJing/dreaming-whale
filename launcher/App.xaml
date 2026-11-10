@@ -40,6 +40,11 @@
         <SolidColorBrush x:Key="BackdropTint" Color="#C0070B13" />
         <SolidColorBrush x:Key="Gold" Color="#FFF2C56B" />
 
+        <!-- 空态插画：鲸尾。状态页 / 表情包 / 提醒页共用这一处定义。
+             之前三处各复制了一份路径字符串，改一次要改三遍——加到第四处之前必须收在这里。 -->
+        <PathGeometry x:Key="WhaleTail"
+                      Figures="M3 13c4.6-.3 7.7-2.8 9-7.7 1.3 4.9 4.4 7.4 9 7.7-1.3-5.2-4.9-8.6-9-8.6S4.3 7.8 3 13Z" />
+
         <!-- 基础文字 -->
         <Style TargetType="TextBlock" x:Key="H1">
             <Setter Property="Foreground" Value="{DynamicResource Text}" />
