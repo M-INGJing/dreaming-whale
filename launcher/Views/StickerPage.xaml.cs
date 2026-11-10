@@ -367,7 +367,7 @@ namespace WhaleLauncher.Views
             var items = CurrentItems();
             GridHost.Children.Clear();
             EmptyHint.Text = "这个分类还是空的。点「打开分类文件夹」，把 GIF / PNG / JPG / WebP 拖进去。";
-            EmptyHint.Visibility = items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
+            EmptyBox.Visibility = items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
             if (items.Count == 0) return;
 
             // 骨架和解码流水线：每上屏 24 个骨架就把这几个的解码排进去，

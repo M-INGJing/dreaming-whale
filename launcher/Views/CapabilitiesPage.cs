@@ -162,7 +162,7 @@ public sealed class CapabilitiesPage : UserControl, IRefreshable
                 foreach (var item in payload.EnumerateArray())
                 {
                     items.Add(item);
-                    menu.Items.Add(new ListBoxItem { Content = Text(item, "label"), Tag = Text(item, "id") });
+                    menu.Items.Add(BuildMenuItem(item));
                 }
             }
             var index = 0;
@@ -187,8 +187,108 @@ public sealed class CapabilitiesPage : UserControl, IRefreshable
         }
     }
 
-    static string BuildSignature(ApiResult res, JsonElement payload)
+    /// <summary>
+    /// 左侧菜单项：名字 + 今日次数环 + 「2/5」。
+    /// 环让「今天还能做几次」不用点进去就能看见，数字给看不清弧长的人兜底。
+    /// </summary>
+    ListBoxItem BuildMenuItem(JsonElement item)
     {
+        var today = item.TryGetProperty("today", out var td) && td.ValueKind == JsonValueKind.Number ? td.GetInt64() : 0;
+        var max = item.TryGetProperty("maxPerDay", out var mx) && mx.ValueKind == JsonValueKind.Number ? mx.GetInt64() : 0;
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var text = new TextBlock
+        {
+            Text = Text(item, "label"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        grid.Children.Add(text);
+
+        var right = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        if (max > 0)
+        {
+            right.Children.Add(TodayRing(today, max));
+            var count = new TextBlock { Text = today + "/" + max, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            count.SetResourceReference(StyleProperty, "Small");
+            right.Children.Add(count);
+        }
+        else if (today > 0)
+        {
+            // 上限 0 = 不限，画环没有意义，只报今天做了几次
+            var count = new TextBlock { Text = today + " 次", VerticalAlignment = VerticalAlignment.Center };
+            count.SetResourceReference(StyleProperty, "Small");
+            right.Children.Add(count);
+        }
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(right);
+
+        return new ListBoxItem
+        {
+            Content = grid,
+            Tag = Text(item, "id"),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+    }
+
+    /// <summary>16px 的今日用量环：底色是空环，金色弧从 12 点顺时针画到今天用掉的比例。</summary>
+    static FrameworkElement TodayRing(long today, long max)
+    {
+        const double size = 16;
+        var radius = (size - 3) / 2;
+        var cx = size / 2;
+        var cy = size / 2;
+
+        var host = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+        var empty = new System.Windows.Shapes.Ellipse { Width = size, Height = size, StrokeThickness = 1.5 };
+        empty.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "LineSoft");
+        host.Children.Add(empty);
+
+        var pct = Math.Max(0, Math.Min(1.0, max <= 0 ? 0 : (double)today / max));
+
+        // 满环用整圆：ArcSegment 从起点画回起点是看不见的
+        if (pct >= 0.999)
+        {
+            var full = new System.Windows.Shapes.Ellipse { Width = size, Height = size, StrokeThickness = 1.5 };
+            full.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Gold");
+            host.Children.Add(full);
+            return host;
+        }
+        if (pct <= 0.001) return host;
+
+        const double startDeg = -90;                       // 12 点方向
+        var endDeg = startDeg + 360 * pct;
+        Point At(double deg) => new Point(
+            cx + radius * Math.Cos(deg * Math.PI / 180),
+            cy + radius * Math.Sin(deg * Math.PI / 180));
+
+        var figure = new PathFigure { StartPoint = At(startDeg), IsClosed = false, IsFilled = false };
+        figure.Segments.Add(new ArcSegment(At(endDeg), new Size(radius, radius), 0,
+            Math.Abs(endDeg - startDeg) > 180, SweepDirection.Clockwise, true));
+
+        var arc = new System.Windows.Shapes.Path
+        {
+            Data = new PathGeometry(new[] { figure }),
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            Width = size,
+            Height = size,
+        };
+        arc.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Gold");
+        host.Children.Add(arc);
+        return host;
+    }
+
+    static string BuildSignature(ApiResult res, JsonElement payload)    {
         var sb = new System.Text.StringBuilder();
         sb.Append(res.Bool("enabled")).Append('|').Append(res.Long("maxPerDay")).Append(';');
         if (payload.ValueKind == JsonValueKind.Array)
