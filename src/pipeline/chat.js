@@ -1200,6 +1200,7 @@ class Bot {
     if ((mm = text.match(/^(?:语态|说话方式|风格|人设)\s*[:：]?\s*([\s\S]{1,120})$/))) {
       const v = mm[1].trim();
       personaStore.save(this.config, { text: v });
+      personaStore.recordTune(this.config, { field: 'text', msg });
       this.logger && this.logger.info('[admin] 语态调整：' + v);
       return say(`好，说话方式记下了：${v}（一直生效，重启也保留）`);
     }
@@ -1214,6 +1215,7 @@ class Bot {
         抽象: '短句、玩梗、装傻、游戏黑话，能五个字说完就别十个字',
       };
       personaStore.save(this.config, { preset: mm[1], text: map[mm[1]] });
+      personaStore.recordTune(this.config, { field: 'preset', msg });
       this.logger && this.logger.info('[admin] 语气切到 ' + mm[1]);
       return say(`语气切成「${mm[1]}」了：${map[mm[1]]}`);
     }
@@ -1233,6 +1235,7 @@ class Bot {
     }
     if ((mm = text.match(/^颜文字\s*(关|少|正常|多)$/))) {
       personaStore.save(this.config, { emoji: mm[1] });
+      personaStore.recordTune(this.config, { field: 'emoji', msg });
       return say(`颜文字用量：${mm[1]}。`);
     }
     if ((mm = text.match(/^能力\s*(链接|链接阅读|主动接话|群聊主动接话)\s*(开|打开|关|关闭)$/))) {

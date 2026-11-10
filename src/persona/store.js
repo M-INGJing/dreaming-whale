@@ -285,4 +285,27 @@ function summary(config) {
   };
 }
 
-module.exports = { load, save, clear, apply, summary };
+/**
+ * 调教证据：记录「因为哪条消息改的」——只存改了哪个字段、消息长度 / 类型 / emoji 有无，不存正文。
+ * 追加写 data/tune-log.jsonl，积累后能看出调教的发生模式（短消息/长消息、私聊/群聊、带不带表情）。
+ */
+function recordTune(config, { field, msg } = {}) {
+  try {
+    const file = path.join(config.paths.dataDir, 'tune-log.jsonl');
+    const text = msg ? String(msg.text || '') : '';
+    const entry = {
+      at: Date.now(),
+      field: String(field || ''),
+      chatType: msg && msg.chatType === 'group' ? 'group' : 'private',
+      len: text ? Array.from(text).length : 0,
+      hasEmoji: text ? /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(text) : false,
+    };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, JSON.stringify(entry) + '\n', 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { load, save, clear, apply, summary, recordTune };

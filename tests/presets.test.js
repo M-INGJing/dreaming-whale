@@ -11,6 +11,21 @@ const path = require('node:path');
 
 const presets = require('../src/persona/presets');
 
+test('recordTune：只记字段/长度/类型/emoji 有无，不记正文', () => {
+  const root = makeRoot();
+  const store = require('../src/persona/store');
+  const config = { paths: { dataDir: path.join(root, 'data') } };
+  const ok = store.recordTune(config, { field: 'text', msg: { text: '以后说话温柔点 😂', chatType: 'private' } });
+  assert.equal(ok, true);
+  const log = fs.readFileSync(path.join(root, 'data', 'tune-log.jsonl'), 'utf8');
+  assert.match(log, /"field":"text"/);
+  assert.match(log, /"chatType":"private"/);
+  assert.match(log, /"hasEmoji":true/);
+  assert.match(log, /"len":\d+/);
+  assert.doesNotMatch(log, /温柔点|说话温柔/, '正文不能进日志');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 function makeRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'whale-presets-'));
   fs.mkdirSync(path.join(dir, 'assets', 'personas'), { recursive: true });
