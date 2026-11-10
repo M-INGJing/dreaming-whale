@@ -38,6 +38,22 @@ namespace WhaleLauncher
         private bool _refreshing;
         private bool _memoryNoticeChecked;
 
+        // 彩蛋：连点顶栏标识 5 次说一句台词。只在底栏停 3 秒，不弹窗、不写日志、不进任何统计。
+        // 两秒一次的 RefreshAsync 会覆盖 StatusLine，所以用 _easterUntil 抢一下优先级。
+        private static readonly string[] BrandLines =
+        {
+            "……你戳我干嘛",
+            "再戳就把你拉黑（骗你的）",
+            "水下的信号不太好，等我一下",
+            "今天的鱼很好吃",
+            "好了好了，我在呢",
+        };
+        private int _brandClicks;
+        private int _brandLineIndex;
+        private DateTime _brandFirstClick = DateTime.MinValue;
+        private string _easterLine = "";
+        private DateTime _easterUntil = DateTime.MinValue;
+
         // 11 项平铺时找东西只能靠记忆，所以按「日常 / 连接 / 系统」分组。
         // 顺序即显示顺序；分组只影响呈现，Key 仍是页面工厂的唯一标识。
         // 图标：24 网格 / 1.6 描边 / 圆头。只重画语义最弱的三枚（状态、表情包、语音），
@@ -474,6 +490,24 @@ namespace WhaleLauncher
             return true;
         }
 
+        // ── 彩蛋 ────────────────────────────────────────────────
+        private void OnBrandClick(object sender, MouseButtonEventArgs e)
+        {
+            var now = DateTime.Now;
+            // 3 秒内没连上就重新数，避免一天里零散点五下也算
+            if ((now - _brandFirstClick).TotalSeconds > 3)
+            {
+                _brandClicks = 0;
+                _brandFirstClick = now;
+            }
+            if (++_brandClicks < 5) return;
+
+            _brandClicks = 0;
+            _easterLine = BrandLines[_brandLineIndex++ % BrandLines.Length];
+            _easterUntil = now.AddSeconds(3);
+            StatusLine.Text = _easterLine;
+        }
+
         // ── 外观：主题 / 背景图 / 标题栏 ────────────────────────
         private void ApplyAppearance()
         {
@@ -714,8 +748,20 @@ namespace WhaleLauncher
                 }
                 if (s.NodeUp && s.NeedsKey && !s.HasKey) parts.Add("还没填 Key");
                 if (s.StFailed > 0) parts.Add($"发送失败 {s.StFailed}");
-                // 更新期间这行归更新流程管，别被两秒一次的刷新覆盖掉
-                if (!_updating) StatusLine.Text = parts.Count > 0 ? string.Join(" · ", parts) : "启动器就绪";
+
+                // 彩蛋：深夜（23:00–05:00）且夜航主题时，状态条后面多一枚小月亮
+                var hour = DateTime.Now.Hour;
+                IconNight.Visibility = Appearance.IsDark && (hour >= 23 || hour < 5)
+                    ? Visibility.Visible : Visibility.Collapsed;
+
+                // 更新期间这行归更新流程管，别被两秒一次的刷新覆盖掉；彩蛋台词优先 3 秒
+                if (_easterUntil > DateTime.Now) StatusLine.Text = _easterLine;
+                else if (!_updating)
+                {
+                    // 都正常的时候别只写「就绪」：她到底在不在，是这行唯一有用的信息
+                    var idle = AnythingRunning ? "她在后台陪着" : "她在等你按启动";
+                    StatusLine.Text = parts.Count > 0 ? string.Join(" · ", parts) : idle;
+                }
 
                 if (Host.Content is IRefreshable r) await r.RefreshAsync();
             }
