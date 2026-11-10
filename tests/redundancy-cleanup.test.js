@@ -127,8 +127,11 @@ test('启动器只去掉无引用成员，联系人错误摘要复用公共方�
   assert.doesNotMatch(source('launcher/Views/DiagPage.xaml.cs'), /\bLatestRunDir\(/);
   assert.doesNotMatch(source('launcher/Views/SettingsPage.xaml.cs'), /\bBuildSection\(/);
   assert.match(source('launcher/Api.cs'), /public static string Detail\(ApiResult res\)/);
+  // 联系人错误摘要复用公共方法：ContactListEditor 走 UiText.Failed（内部仍调 Api.Detail），
+  // ContactPicker 直接调 Api.Detail；两处都不再各自写一个 Detail helper。
+  assert.match(source('launcher/Views/ContactListEditor.cs'), /UiText\.Failed\(/);
+  assert.match(source('launcher/Views/ContactPicker.xaml.cs'), /Api\.Detail\(res\)/);
   for (const rel of ['launcher/Views/ContactListEditor.cs', 'launcher/Views/ContactPicker.xaml.cs']) {
-    assert.match(source(rel), /Api\.Detail\(res\)/);
     assert.doesNotMatch(source(rel), /private static string Detail\(/);
   }
 });

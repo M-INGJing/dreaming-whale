@@ -54,7 +54,8 @@ test('更新过程有进度反馈：流式读输出 + 底栏进度条', () => {
 
 test('更新期间状态行不被两秒一次的刷新覆盖', () => {
   const code = read('MainWindow.xaml.cs');
-  assert.match(code, /if \(!_updating\) StatusLine\.Text/, '刷新会把更新进度文字冲掉');
+  // 彩蛋台词（_easterUntil）优先 3 秒，其余情况仍由 !_updating 守住：更新中不被刷新冲掉
+  assert.match(code, /else if \(!_updating\)/, '刷新会把更新进度文字冲掉');
   assert.match(code, /ShowUpdateProgress/, '缺进度展示方法');
   assert.match(code, /HideUpdateProgress/, '更新结束要收起进度条');
 });

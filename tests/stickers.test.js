@@ -44,8 +44,11 @@ test('表情包：默认关（总闸），关着时一片空白', () => {
 });
 
 test('表情包：开关在调试台登记表最前面，并标着 experimental', () => {
-  assert.equal(features.REGISTRY[0].key, 'stickers', '实验性总闸要排在最上面');
-  assert.equal(features.REGISTRY[0].experimental, true);
+  // 实验性开关（bili / stickers）要排在登记表最上面，方便在调试台一眼看到
+  assert.equal(features.REGISTRY[0].experimental, true, '实验性总闸要排在最上面');
+  const sticker = features.REGISTRY.find((f) => f.key === 'stickers');
+  assert.ok(sticker, '表情包开关仍在登记表里');
+  assert.equal(sticker.experimental, true, '表情包开关要标 experimental');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'whale-s-'));
   try {
     const listed = features.list(loadConfig({ root, env: {} }));

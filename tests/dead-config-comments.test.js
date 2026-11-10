@@ -17,7 +17,8 @@ const root = path.resolve(__dirname, '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8').replace(/^\uFEFF/, '');
 
 const DEAD_SECTIONS = ['share', 'digest'];
-const DEAD_WORDS = /主动分享|消息汇总/;
+// 死的是「主动分享视频」（4.0 下线）与「消息汇总」；B 站养鱼新功能的「主动分享」是另一回事，不误伤。
+const DEAD_WORDS = /主动分享视频|消息汇总/;
 
 test('出厂配置和存在的本机配置里不再有 share / digest 段', () => {
   for (const name of ['config.json', 'config.example.json']) {

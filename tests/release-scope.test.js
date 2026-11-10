@@ -17,7 +17,8 @@ test('本批发布不注册暂缓的朋友圈、日记和收集功能', () => {
     assert.equal(fs.existsSync(path.join(root, file)), false, file);
   }
   for (const file of ['src/app.js', 'src/http/routes/index.js', 'server.js']) {
-    assert.doesNotMatch(read(file), /DiaryService|MomentsService|runtime\.diary|require\('\.\/(?:diary|moments)'\)/);
+    // runtime.diary（旧「日记」服务）是死的；runtime.diaryIdle 是 B 站养鱼的新功能，别误伤
+    assert.doesNotMatch(read(file), /DiaryService|MomentsService|runtime\.diary(?!Idle)|require\('\.\/(?:diary|moments)'\)/);
   }
   assert.doesNotMatch(read('launcher/MainWindow.xaml.cs'), /MomentsPage|Key = "朋友圈"/);
   assert.doesNotMatch(read('launcher/Views/ReminderPage.xaml'), /ChkDiaryEnabled/);
