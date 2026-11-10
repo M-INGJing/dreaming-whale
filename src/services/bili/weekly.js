@@ -16,6 +16,7 @@ const biliStore = require('../../infra/biliStore');
 const diaryFormat = require('../../core/bili/diaryFormat');
 const features = require('../../infra/features');
 const persona = require('../../persona');
+const selfCard = require('../../memory/selfCard');
 
 const WEEKLY_FILE = 'weekly.json';
 const TOTAL_CAP = 3000;
@@ -151,6 +152,16 @@ async function maybeUpdate(runtime, opts = {}) {
   };
   biliStore.writeJson(weeklyPath(config), entry);
   biliStore.appendEvent(config, { kind: 'weekly_summary', weekStart, days: week.days, chars: entry.summary.length });
+  // 写回 SelfCard（她自己的记忆）：likes/dislikes → preferences，state → state，summary → event
+  // 这是「日记 → 记忆」的反哺：让她「因你而变」持久化，而不是只注入聊天 14 天就消失
+  selfCard.applyWeekly(config, {
+    likes: parsed.likes,
+    dislikes: parsed.dislikes,
+    state: parsed.state,
+    summary: parsed.summary,
+    weekStart,
+    now: Date.now(),
+  });
   runtime.logger?.info?.('[bili] 每周小结已更新（' + week.days + ' 天日记）');
   return { ok: true, entry };
 }

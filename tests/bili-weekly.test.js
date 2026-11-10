@@ -121,6 +121,21 @@ test('maybeUpdate：有人设时，把语气基调注入写小结的提示词', 
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('maybeUpdate：小结写回 SelfCard（likes/dislikes/state/summary）', async () => {
+  const { config, root } = tmpConfig();
+  const selfCard = require('../src/memory/selfCard');
+  biliStore.writeDiarySection(config, 'owner', dayOf(1), '这周看了猫。');
+  const runtime = { config, logger: null, llm: { isMock: false, complete: async () => '{"summary":"这周有点累但还行。","likes":["猫"],"dislikes":["吵架"],"state":"有点累"}' } };
+  const out = await weekly.maybeUpdate(runtime, { now: sunday });
+  assert.equal(out.ok, true);
+  const card = selfCard.load(config);
+  assert.deepEqual(card.preferences.map((p) => p.text).sort(), ['猫', '吵架'].sort());
+  assert.equal(card.state, '有点累');
+  assert.equal(card.events.length, 1);
+  assert.match(card.events[0].summary, /这周有点累/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('scheduler.tick：窗口没开也会在周日 22 点后更新周小结', async () => {
   const { createBiliScheduler } = require('../src/services/bili/scheduler');
   const { config, root } = tmpConfig({
