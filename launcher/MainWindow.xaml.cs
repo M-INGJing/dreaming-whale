@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Runtime.InteropServices;
@@ -22,6 +23,8 @@ namespace WhaleLauncher
     {
         public string Key { get; set; }
         public string Label { get; set; }
+        /// <summary>左侧导航的分组名（日常 / 连接 / 系统）。分组由 CollectionView 提供，条目本身仍是扁平的。</summary>
+        public string Group { get; set; }
         public Geometry Icon { get; set; }
         public override string ToString() => Label ?? Key ?? "";
     }
@@ -35,15 +38,25 @@ namespace WhaleLauncher
         private bool _refreshing;
         private bool _memoryNoticeChecked;
 
+        // 11 项平铺时找东西只能靠记忆，所以按「日常 / 连接 / 系统」分组。
+        // 顺序即显示顺序；分组只影响呈现，Key 仍是页面工厂的唯一标识。
+        // 图标：24 网格 / 1.6 描边 / 圆头。只重画语义最弱的三枚（状态、表情包、语音），
+        // 齿轮、铃铛、折线这类语义已经很强的保持原样——全换会让人短期找不到入口。
         private static readonly NavEntry[] NavKeys =
         {
-            new NavEntry { Key = "状态", Label = "状态", Icon = Geometry.Parse("M4 4h7v7H4z M13 4h7v4h-7z M13 10h7v10h-7z M4 13h7v7H4z") },
-            new NavEntry { Key = "人设", Label = "人设", Icon = Geometry.Parse("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7") },
-            new NavEntry { Key = "表情包", Label = "表情包", Icon = Geometry.Parse("M4 4h16v16H4z M8.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z M20 16l-4.6-4.6L7 20") },
-            new NavEntry { Key = "主动与提醒", Label = "主动与提醒", Icon = Geometry.Parse("M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8 M10.5 20a2 2 0 0 0 3 0") },
-            new NavEntry { Key = "微信桥接", Label = "微信桥接", Icon = Geometry.Parse("M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-4-.9L3 21l1.9-3.5a8.4 8.4 0 1 1 16.1-6Z M8 10h8 M8 13h5") },
-            new NavEntry { Key = "诊断", Label = "诊断", Icon = Geometry.Parse("M3 12h4l2-5 4 10 2-5h6") },
-            new NavEntry { Key = "设置", Label = "设置", Icon = Geometry.Parse("M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.4.5.86 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z") },
+            // 日常
+            new NavEntry { Key = "状态", Label = "状态", Group = "日常", Icon = Geometry.Parse("M3 8c2.6-2.2 5.4-2.2 8 0s5.4 2.2 8 0 M3 14c2.6-2.2 5.4-2.2 8 0s5.4 2.2 8 0 M3 20c2.6-2.2 5.4-2.2 8 0s5.4 2.2 8 0") },
+            new NavEntry { Key = "人设", Label = "人设", Group = "日常", Icon = Geometry.Parse("M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7") },
+            new NavEntry { Key = "表情包", Label = "表情包", Group = "日常", Icon = Geometry.Parse("M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z M8.5 10h.01 M15.5 10h.01 M8.5 14c1 1.6 2.2 2.4 3.5 2.4s2.5-.8 3.5-2.4") },
+            // 连接
+            new NavEntry { Key = "微信桥接", Label = "微信桥接", Group = "连接", Icon = Geometry.Parse("M21 11.5a8.4 8.4 0 0 1-9 8.4 9.9 9.9 0 0 1-4-.9L3 21l1.9-3.5a8.4 8.4 0 1 1 16.1-6Z M8 10h8 M8 13h5") },
+            new NavEntry { Key = "语音发送", Label = "语音发送", Group = "连接", Icon = Geometry.Parse("M8 9v6 M12 6v12 M16 9v6") },
+            new NavEntry { Key = "B 站", Label = "B 站", Group = "连接", Icon = Geometry.Parse("M3 7h18v12H3z M8 7l-2-3 M16 7l2-3 M10 11l5 2.5-5 2.5z") },
+            // 系统
+            new NavEntry { Key = "能力", Label = "能力", Group = "系统", Icon = Geometry.Parse("M13 2 4 14h6l-1 8 9-12h-6z") },
+            new NavEntry { Key = "主动与提醒", Label = "主动与提醒", Group = "系统", Icon = Geometry.Parse("M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8 M10.5 20a2 2 0 0 0 3 0") },
+            new NavEntry { Key = "诊断", Label = "诊断", Group = "系统", Icon = Geometry.Parse("M3 12h4l2-5 4 10 2-5h6") },
+            new NavEntry { Key = "设置", Label = "设置", Group = "系统", Icon = Geometry.Parse("M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.1-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.12.4.5.86 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z") },
         };
 
         public MainWindow()
@@ -58,10 +71,11 @@ namespace WhaleLauncher
             var ver = UpdateManifestService.LocalVersion(dir);
             VersionText.Text = ver.Length > 0 ? "v" + ver : "v?";
 
-            foreach (var k in NavKeys) Nav.Items.Add(k);
-            Nav.Items.Insert(3, new NavEntry { Key = "语音发送", Label = "语音发送", Icon = Geometry.Parse("M9 3h6v12H9z M5 10v3a7 7 0 0 0 14 0v-3 M12 20v3 M8 23h8") });
-            Nav.Items.Insert(4, new NavEntry { Key = "B 站", Label = "B 站", Icon = Geometry.Parse("M3 7h18v12H3z M8 7l-2-3 M16 7l2-3 M10 11l5 2.5-5 2.5z") });
-            Nav.Items.Insert(5, new NavEntry { Key = "能力", Label = "能力", Icon = Geometry.Parse("M13 2 4 14h6l-1 8 9-12h-6z") });
+            // 分组视图：ListBox 仍是单级选择，组头只做归类，不参与命中与选中，
+            // 键盘上下键只会落在真实条目上（所以 GoTo / SelectedIndex 的逻辑不用改）。
+            var navView = new ListCollectionView(NavKeys);
+            navView.GroupDescriptions.Add(new PropertyGroupDescription("Group"));
+            Nav.ItemsSource = navView;
             Nav.SelectedIndex = 0;
 
             _sup.Say("启动器就绪 · " + dir);
@@ -578,6 +592,9 @@ namespace WhaleLauncher
             Nav.ScrollIntoView(item);
         }
 
+        /// <summary>给页面用的跳转入口（状态页的「进入诊断」）：GoTo 是私有的，页面拿不到。</summary>
+        public void NavigateTo(string key) => GoTo(key);
+
         private void OnSettings(object sender, RoutedEventArgs e) => GoTo("设置");
 
         // ── 顶栏动作 ────────────────────────────────────────────
@@ -667,13 +684,26 @@ namespace WhaleLauncher
                 DotWechat.Fill = s.BrOnline && s.BrAccountOk ? (Brush)FindResource("Ok")
                     : (s.BrOnline ? (Brush)FindResource("Warn") : (Brush)FindResource("Idle"));
 
-                NodeStateText.Text = s.NodeUp ? "端口 " + s.Port : "内核未启动";
-                BridgeStateText.Text = s.BrOnline ? "在线" : (s.NodeUp ? "连接中" : "未启动");
-
                 var who = string.IsNullOrEmpty(s.BrAccountNick) ? s.BrAccount : s.BrAccountNick;
-                WechatStateText.Text = s.BrAccountOk ? "已登录" : (s.BrOnline ? "待确认" : "未登录");
-                WechatLabel.ToolTip = string.IsNullOrEmpty(who) ? "微信" : "微信 · " + who;
+                var nodeText = s.NodeUp ? "端口 " + s.Port : "未启动";
+                var bridgeText = s.BrOnline ? "在线" : (s.NodeUp ? "连接中" : "未启动");
+                var wechatText = s.BrAccountOk ? "已登录" : (s.BrOnline ? "待确认" : "未登录");
+
+                // 顶栏只说结论：用户真正想知道的是「她现在能不能回消息」。
+                // 三个字段的明细放进 ToolTip，不再并排占掉三个胶囊的宽度。
+                StateSummary.Text = !s.NodeUp ? "她睡着了"
+                    : (!s.BrOnline ? "正在醒"
+                    : (s.BrAccountOk ? "在想事情" : "还没连上微信"));
+                var detail = "内核：" + nodeText + "\n桥接：" + bridgeText + "\n微信：" + wechatText
+                             + (string.IsNullOrEmpty(who) ? "" : "（" + who + "）");
+                StatusStrip.ToolTip = detail;
+                StateSummary.ToolTip = detail;
                 BtnToggleText.Text = AnythingRunning ? "停止" : "启动";
+
+                // 底栏右：本次运行的收发量（/api/status 的 status 段，进程重启即归零，不是「今日」）
+                FootStats.Text = s.StReceived > 0 || s.StReplied > 0
+                    ? "本次 收到 " + s.StReceived + " · 回复 " + s.StReplied
+                    : "";
 
                 // 内核与端口已经并进顶栏的内核胶囊；这里只说桥接和需要处理的状态
                 var parts = new List<string>();

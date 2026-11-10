@@ -69,6 +69,13 @@ namespace WhaleLauncher.Views
 
         private void Apply(Snapshot s)
         {
+            // 一句话结论：先说「她现在能不能回消息」，再让下面三行解释为什么。
+            // 颜色交给三盏灯，标题只负责说人话。
+            HealthLine.Text = !s.NodeUp ? "她还在睡"
+                : (!s.NodeReady ? "正在醒"
+                : (!s.BrOnline ? "醒了，但还没连上微信"
+                : (!s.BrAccountOk ? "连上了，账号还没确认" : "在正常回消息")));
+
             // 内核
             DotNode.Fill = s.NodeReady ? (Brush)FindResource("Ok") : (Brush)FindResource(s.NodeUp ? "Warn" : "Idle");
             NodeMain.Text = !s.NodeUp ? "未启动" : (s.NodeReady ? "运行中" : "等待就绪");
@@ -162,7 +169,7 @@ namespace WhaleLauncher.Views
             {
                 Recent.ItemsSource = null;
                 _recentJson = "";
-                RecentEmpty.Visibility = Visibility.Visible;
+                RecentEmptyBox.Visibility = Visibility.Visible;
                 RecentEmpty.Text = "内核没起，看不到消息。";
                 RecentHint.Text = "";
                 return;
@@ -188,7 +195,7 @@ namespace WhaleLauncher.Views
                 }
                 Recent.ItemsSource = items;
                 _recentJson = json;
-                RecentEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                RecentEmptyBox.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
                 if (items.Count == 0) RecentEmpty.Text = "还没有消息。先在微信里跟她说一句。";
                 RecentHint.Text = items.Count > 0 ? items.Count + " 条" : "";
             }
@@ -212,6 +219,10 @@ namespace WhaleLauncher.Views
         }
 
         // ── 动作 ────────────────────────────────────────────────
+        /// <summary>主卡里的「诊断」：跳到诊断页，比让人自己去左栏找快一步。</summary>
+        private void OnDiag(object sender, RoutedEventArgs e)
+            => (Window.GetWindow(this) as MainWindow)?.NavigateTo("诊断");
+
         private async void OnRefresh(object sender, RoutedEventArgs e)
         {
             _lastCare = DateTime.MinValue;
