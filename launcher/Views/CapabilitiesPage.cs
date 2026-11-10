@@ -340,7 +340,7 @@ public sealed class CapabilitiesPage : UserControl, IRefreshable
     {
         var body = "{\"globalEnabled\":" + (globalEnabled.IsChecked == true ? "true" : "false")
             + ",\"globalMaxPerDay\":" + Num(globalMax.Text, 5) + "}";
-        await PostAsync("/api/capabilities/set", body, "全局设置已保存。");
+        await PostAsync("/api/capabilities/set", body, UiText.Saved("全局设置"));
     }
 
     async Task SaveItemAsync()
@@ -349,7 +349,7 @@ public sealed class CapabilitiesPage : UserControl, IRefreshable
         var max = itemMax.Text.Trim();
         var body = "{\"id\":\"" + Api.Esc(selectedId) + "\",\"enabled\":" + (itemEnabled.IsChecked == true ? "true" : "false")
             + (max.Length > 0 ? ",\"maxPerDay\":" + Num(max, 0) : "") + "}";
-        await PostAsync("/api/capabilities/set", body, "这项能力已保存。");
+        await PostAsync("/api/capabilities/set", body, UiText.Saved("这项能力"));
     }
 
     async Task RunNowAsync()
@@ -359,7 +359,7 @@ public sealed class CapabilitiesPage : UserControl, IRefreshable
         var res = await Api.Post(_sup.Url, "/api/capabilities/run", "{\"id\":\"" + Api.Esc(selectedId) + "\"}");
         if (!res.Ok)
         {
-            result.Text = "执行失败：" + (res.Error.Length > 0 ? res.Error : Api.Detail(res));
+            result.Text = UiText.Failed("执行", res);
             return;
         }
         var r = res.Prop("result");
@@ -374,7 +374,7 @@ public sealed class CapabilitiesPage : UserControl, IRefreshable
         var res = await Api.Post(_sup.Url, path, body);
         if (!res.Ok)
         {
-            result.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : Api.Detail(res));
+            result.Text = UiText.Failed("保存", res);
             return;
         }
         result.Text = okText;

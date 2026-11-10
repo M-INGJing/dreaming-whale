@@ -359,12 +359,12 @@ public sealed class BiliPage : UserControl, IRefreshable
         var res = await Api.Post(_sup.Url, "/api/config", body);
         if (!res.Ok)
         {
-            runResult.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : Api.Detail(res));
+            runResult.Text = UiText.Failed("保存", res);
             return;
         }
         editorsLoaded = false;
         await RefreshAsync();
-        runResult.Text = "已保存（内核已热加载）。";
+        runResult.Text = UiText.Saved("内核已热加载");
     }
 
     static int ParseInt(string text, int fallback)

@@ -1456,9 +1456,9 @@ namespace WhaleLauncher.Views
             save.Click += async (s, e) =>
             {
                 var res = await Api.Post(_sup.Url, "/api/settings", ModelRequest());
-                if (!res.Ok) { chatResult.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw); return; }
+                if (!res.Ok) { chatResult.Text = UiText.Failed("保存", res); return; }
                 key.Password = "";
-                chatResult.Text = "已保存。";
+                chatResult.Text = UiText.Saved();
                 // 服务端可能顺手改了看图模型（跟随/解除跟随），必须重新拉一次，
                 // 否则「看图」页还显示保存前的旧模型。
                 _lastLoad = DateTime.MinValue;
@@ -1527,7 +1527,7 @@ namespace WhaleLauncher.Views
                 var res = await Api.Post(_sup.Url, "/api/settings", payload);
                 if (!res.Ok)
                 {
-                    visionResult.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw);
+                    visionResult.Text = UiText.Failed("保存", res);
                     return false;
                 }
                 if (visionKey.Password.Length > 0) visionKey.Password = "";

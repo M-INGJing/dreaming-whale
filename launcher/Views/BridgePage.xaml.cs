@@ -561,11 +561,11 @@ namespace WhaleLauncher.Views
                 var body = new StringContent("{\"patch\":" + json + "}", Encoding.UTF8, "application/json");
                 var res = await _http.PostAsync(_sup.Url + "/api/config", body);
                 var text = await res.Content.ReadAsStringAsync();
-                SwitchHint.Text = res.IsSuccessStatusCode ? "已保存，桥接会在几秒内用上新配置。" : "保存失败：" + text;
+                SwitchHint.Text = res.IsSuccessStatusCode ? UiText.Saved("桥接会在几秒内用上新配置") : UiText.Failed("保存", text);
             }
             catch (Exception ex)
             {
-                SwitchHint.Text = "保存失败：" + ex.Message;
+                SwitchHint.Text = UiText.Failed("保存", ex.Message);
             }
         }
 

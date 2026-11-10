@@ -225,10 +225,10 @@ namespace WhaleLauncher.Views
                 var res = await Api.Post(_sup.Url, "/api/config", json);
                 if (!res.Ok)
                 {
-                    CareStatus.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : Detail(res));
+                    CareStatus.Text = UiText.Failed("保存", res);
                     return false;
                 }
-                CareStatus.Text = "已保存 " + DateTime.Now.ToString("HH:mm:ss");
+                CareStatus.Text = UiText.SavedAt();
                 return true;
             }
             finally
@@ -315,10 +315,10 @@ namespace WhaleLauncher.Views
                 var res = await Api.Post(_sup.Url, "/api/config", json);
                 if (!res.Ok)
                 {
-                    RulesStatus.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : Detail(res));
+                    RulesStatus.Text = UiText.Failed("规则保存", res);
                     return false;
                 }
-                RulesStatus.Text = "规则已保存 " + DateTime.Now.ToString("HH:mm:ss");
+                RulesStatus.Text = UiText.SavedAt("规则");
                 _lastLoad = DateTime.MinValue;
                 await RefreshAsync();
                 return true;

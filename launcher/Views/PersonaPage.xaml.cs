@@ -49,7 +49,7 @@ namespace WhaleLauncher.Views
             _saveTimer.Tick += async (_, __) =>
             {
                 _saveTimer.Stop();
-                await SaveAllAsync("已保存");
+                await SaveAllAsync(UiText.SavedAt());
             };
 
             Loaded += async (_, __) => await RefreshAsync();
@@ -317,7 +317,7 @@ namespace WhaleLauncher.Views
             var value = chk.IsChecked == true;
             var res = await Api.Post(_sup.Url, "/api/features",
                 $"{{\"key\":\"{Api.Esc(key)}\",\"value\":{(value ? "true" : "false")}}}");
-            SaveState.Text = res.Ok ? $"开关 {key} → {(value ? "开" : "关")}" : "开关保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw);
+            SaveState.Text = res.Ok ? $"开关 {key} → {(value ? "开" : "关")}" : UiText.Failed("开关保存", res);
         }
 
         // ── 保存 ────────────────────────────────────────────────
@@ -377,7 +377,7 @@ namespace WhaleLauncher.Views
             };
         }
 
-        private async void OnSaveAll(object sender, RoutedEventArgs e) => await SaveAllAsync("已保存");
+        private async void OnSaveAll(object sender, RoutedEventArgs e) => await SaveAllAsync(UiText.SavedAt());
 
         private async void OnReload(object sender, RoutedEventArgs e)
         {
@@ -430,7 +430,7 @@ namespace WhaleLauncher.Views
             var res = await Api.Post(_sup.Url, "/api/persona", json);
             if (!res.Ok)
             {
-                SaveState.Text = "保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw);
+                SaveState.Text = UiText.Failed("保存", res);
                 return;
             }
 
@@ -439,7 +439,7 @@ namespace WhaleLauncher.Views
             var ownerResult = await Api.Post(_sup.Url, "/api/settings", $"{{\"userName\":\"{Api.Esc(owner)}\"}}");
             if (!ownerResult.Ok)
             {
-                SaveState.Text = "人设已保存，但称呼保存失败：" + ownerResult.Error;
+                SaveState.Text = UiText.Saved("人设") + "，但" + UiText.Failed("称呼保存", ownerResult);
                 return;
             }
             var patch = "{\"patch\":{" +
@@ -452,13 +452,13 @@ namespace WhaleLauncher.Views
             var configResult = await Api.Post(_sup.Url, "/api/config", patch);
             if (!configResult.Ok)
             {
-                SaveState.Text = "人设与称呼已保存，但其他设置保存失败：" + configResult.Error;
+                SaveState.Text = UiText.Saved("人设与称呼") + "，但" + UiText.Failed("其他设置保存", configResult);
                 return;
             }
             _loadedEmoji = emoji;
 
-            SaveState.Text = okText + " · " + DateTime.Now.ToString("HH:mm:ss");
-            PresetSaved.Text = "✔ 已保存";
+            SaveState.Text = okText;
+            PresetSaved.Text = "✔ " + UiText.Saved();
             PresetSaved.Foreground = (Brush)FindResource("Text");
             }
             finally { _saveGate.Release(); }
@@ -477,7 +477,7 @@ namespace WhaleLauncher.Views
             }
             _loaded = false;
             await LoadAsync();                       // LoadAsync 会按新的 sourcePreset 选中下拉框
-            PresetSaved.Text = "✔ 已保存";
+            PresetSaved.Text = "✔ " + UiText.Saved();
             PresetSaved.Foreground = (Brush)FindResource("Text");
         }
 

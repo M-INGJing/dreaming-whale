@@ -261,8 +261,8 @@ namespace WhaleLauncher.Views
                 + "}}";
             var res = await Api.Post(_sup.Url, "/api/config", body);
             StatusText.Text = res.Ok
-                ? "表情包设置已保存 · " + DateTime.Now.ToString("HH:mm:ss")
-                : "保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw);
+                ? UiText.SavedAt("表情包设置")
+                : UiText.Failed("保存", res);
         }
 
         /* ── 页签 ──────────────────────────────────────────────── */
@@ -287,8 +287,8 @@ namespace WhaleLauncher.Views
                 + "}}";
             var res = await Api.Post(_sup.Url, "/api/config", body);
             StatusText.Text = res.Ok
-                ? $"表情包频率已保存：{Math.Round(chance * 100)}%" + (ensure ? "，必发已开" : "") + " · " + DateTime.Now.ToString("HH:mm:ss")
-                : "保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw);
+                ? UiText.SavedAt($"表情包频率 {Math.Round(chance * 100)}%" + (ensure ? "，必发已开" : ""))
+                : UiText.Failed("保存", res);
             if (res.Ok) await LoadAsync();
         }
 
@@ -604,7 +604,7 @@ namespace WhaleLauncher.Views
             if (_loading || !_sup.NodeRunning) return;
             var on = ChkEnabled.IsChecked == true;
             var res = await Api.Post(_sup.Url, "/api/features", $"{{\"key\":\"stickers\",\"value\":{(on ? "true" : "false")}}}");
-            StatusText.Text = res.Ok ? $"表情包已{(on ? "开启" : "关闭")}" : "保存失败：" + (res.Error.Length > 0 ? res.Error : res.Raw);
+            StatusText.Text = res.Ok ? $"表情包已{(on ? "开启" : "关闭")}" : UiText.Failed("开关保存", res);
             _loaded = false;
             _nextRefresh = DateTime.MinValue;
             await LoadAsync();

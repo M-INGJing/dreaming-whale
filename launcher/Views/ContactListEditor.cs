@@ -124,14 +124,14 @@ namespace WhaleLauncher.Views
                 var res = await Api.Post(_sup.Url, "/api/config", body);
                 if (!res.Ok)
                 {
-                    SetError("保存失败：" + Api.Detail(res));
+                    SetError(UiText.Failed("保存", res));
                     Status?.Invoke("白名单 / 黑名单保存失败，界面先保留旧值。");
                     return;
                 }
                 _items = ids;
                 SetError("");
                 Render();
-                Status?.Invoke("已保存 " + DateTime.Now.ToString("HH:mm:ss"));
+                Status?.Invoke(UiText.SavedAt());
             }
             finally
             {
