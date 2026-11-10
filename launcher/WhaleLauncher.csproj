@@ -32,6 +32,8 @@
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <Resource Include="Assets\app.ico" />
+    <!-- 人设页角色卡的头像：同一张图，按 Resource 打包才能用 pack URI 引用 -->
+    <Resource Include="Assets\app.png" />
     <EmbeddedResource Include="..\scripts\vb-cable-pack45.json" LogicalName="WhaleLauncher.VbCablePack45.json" />
     <EmbeddedResource Include="Assets\minimax-voices.json" LogicalName="WhaleLauncher.MiniMaxVoices.json" />
   </ItemGroup>

@@ -17,7 +17,37 @@
             </StackPanel>
         </DockPanel>
 
-        <ScrollViewer x:Name="Body" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 角色卡：只读。她是谁、现在用什么声音说话，一进这页先看见这个；
+                 表单在右边，卡不做输入，也不参与 SetReadOnly（内核没起时它照样该看得见） -->
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16,18" VerticalAlignment="Top">
+                <StackPanel>
+                    <Ellipse Width="72" Height="72" HorizontalAlignment="Center">
+                        <Ellipse.Fill>
+                            <ImageBrush ImageSource="Assets/app.png" Stretch="UniformToFill" />
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <TextBlock x:Name="CardName" Text="鲸鲸" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Text}" HorizontalAlignment="Center"
+                               Margin="0,10,0,0" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="CardMeta" Text="鲸鱼娘" Style="{StaticResource Small}"
+                               HorizontalAlignment="Center" Margin="0,3,0,0" />
+
+                    <Border Height="1" Background="{DynamicResource LineSoft}" Margin="0,14,0,12" />
+                    <TextBlock Text="现在的样子" Style="{StaticResource Label}" />
+                    <TextBlock x:Name="CardChipPrivate" Style="{StaticResource Small}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                    <TextBlock x:Name="CardChipGroup" Style="{StaticResource Small}" Margin="0,5,0,0" TextWrapping="Wrap" />
+                    <TextBlock x:Name="CardChipEmoji" Style="{StaticResource Small}" Margin="0,5,0,0" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+        <ScrollViewer x:Name="Body" Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="0,0,10,0">
 
                     <!-- 身份 -->
@@ -207,6 +237,7 @@
                     </Border>
                 </StackPanel>
             </ScrollViewer>
+        </Grid>
 
         <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
             <TextBlock x:Name="SaveState" DockPanel.Dock="Left" Style="{StaticResource Small}" VerticalAlignment="Center" />

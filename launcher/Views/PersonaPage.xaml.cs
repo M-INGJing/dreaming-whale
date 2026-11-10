@@ -213,7 +213,32 @@ namespace WhaleLauncher.Views
         {
             HintPrivate.Text = "大约 " + Preview("嗯嗯，我知道啦，那今天先这样吧", TxtPrivate.Text) + " 个字一句话";
             HintGroup.Text = "群里短一些更像活人：" + Preview("在的在的", TxtGroup.Text) + " 个字";
+            UpdateCard();
         }
+
+        /// <summary>
+        /// 左侧角色卡只反映表单当前的值，不做第二份数据源——
+        /// 否则「卡上写 200 字、右边输入框是 90」这种不一致会让人以为哪边坏了。
+        /// </summary>
+        private void UpdateCard()
+        {
+            if (CardName == null || TxtName == null) return;
+
+            var name = (TxtName.Text ?? "").Trim();
+            CardName.Text = name.Length == 0 ? "鲸鲸" : name;
+
+            var age = (TxtAge.Text ?? "").Trim();
+            CardMeta.Text = age.Length == 0 ? "鲸鱼娘" : "鲸鱼娘 · " + age + " 岁";
+
+            CardChipPrivate.Text = "· 私聊 " + Limit(TxtPrivate.Text, 200) + " 字以内";
+            CardChipGroup.Text = "· 群聊 " + Limit(TxtGroup.Text, 90) + " 字以内";
+
+            var pct = SldEmoji == null ? 30 : (int)Math.Round(SldEmoji.Value);
+            CardChipEmoji.Text = pct <= 0 ? "· 不带颜文字" : "· 颜文字 " + pct + "%";
+        }
+
+        private static string Limit(string raw, int fallback)
+            => int.TryParse((raw ?? "").Trim(), out var n) && n > 0 ? n.ToString() : fallback.ToString();
 
         private static string Preview(string sample, string limit)
         {
@@ -322,6 +347,7 @@ namespace WhaleLauncher.Views
         private void UpdateEmojiHint()
         {
             if (HintEmoji == null || SldEmoji == null) return;
+            UpdateCard();
             var pct = (int)Math.Round(SldEmoji.Value);
             if (pct <= 0)
             {
