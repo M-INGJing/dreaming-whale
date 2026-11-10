@@ -62,3 +62,6 @@ runtime/
 /backup/
 /tests/voice-send/bin/
 /tests/voice-send/obj/
+
+# AI 协作者的本地记忆目录（只在本机）：不含密钥，但带本机路径，不入库
+.workbuddy/
