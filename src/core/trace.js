@@ -109,10 +109,10 @@ function createTrace({ dataDir, enabled = true, raw = false, now = () => Date.no
   }
 
   /**
-   * @param {{msg:object, decision:object, state?:object}} input
+   * @param {{msg:object, decision:object, state?:object, personaVersion?:string, system?:string}} input
    * @returns {{fp:string, chat:string}|null}
    */
-  function record({ msg, decision, state } = {}) {
+  function record({ msg, decision, state, personaVersion = '', system = '' } = {}) {
     if (!enabled || !msg || !decision) return null;
     const nowMs = now();
     const text = String(msg.text || '');
@@ -133,6 +133,9 @@ function createTrace({ dataDir, enabled = true, raw = false, now = () => Date.no
       len: Array.from(text).length,
       sender: hash8(msg.senderId || msg.senderName || ''),
       state: stateSummary(state, nowMs),
+      // 人设版本（id@version）+ 提示词哈希：回答「她这次照哪一版说的」用；只记哈希不记正文
+      pv: personaVersion || '',
+      ph: system ? hash8(system) : '',
     };
     ensure();
     try {

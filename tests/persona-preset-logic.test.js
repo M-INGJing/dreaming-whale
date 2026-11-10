@@ -99,7 +99,8 @@ test('各版人设预设的差异确实在 customPrompt 上（都写了内容且
   for (const f of fs.readdirSync(dir).filter((n) => /^persona-.*\.json$/i.test(n))) {
     const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8').replace(/^\uFEFF/, ''));
     const cp = String(data.customPrompt || '');
-    assert.ok(cp.length > 200, f + ' 的 customPrompt 太短，等于没有');
+    // standard 是基线：共享块已经提供身份/说话方式，customPrompt 可为空
+    assert.ok(cp.length > 200 || data.id === 'persona-standard', f + ' 的 customPrompt 太短，等于没有');
     seen.set(f, cp);
   }
   assert.ok(seen.size >= 3, '至少要有三版预设');

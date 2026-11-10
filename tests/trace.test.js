@@ -77,6 +77,27 @@ test('判定链只记原因和状态，不含聊天正文', () => {
   assert.ok(!fs.existsSync(path.join(dir, 'trace', 'raw')), '没开原文就不该建 raw 目录');
 });
 
+test('判定链带人设版本（pv）和提示词哈希（ph），但不带提示词正文', () => {
+  const dir = tmpDir('whale-trace-pv-');
+  const trace = createTrace({ dataDir: dir, raw: false });
+  trace.record({
+    msg: {
+      platform: 'wechat', chatId: 'c1', chatType: 'private',
+      senderId: 's1', senderName: '小海', text: '在吗', atMe: false, msgId: 'm1',
+    },
+    decision: { action: 'reply', reason: 'addressed' },
+    state: {},
+    personaVersion: 'persona-tieba@2.0',
+    system: '你是鲸鲸…（一大段提示词正文，绝不该落进 trace）',
+  });
+  const all = readAll(dir).join('\n');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  assert.match(all, /"pv":"persona-tieba@2\.0"/, 'pv 要记录 id@version');
+  assert.match(all, /"ph":"[0-9a-f]{8}"/, 'ph 要记录 8 位提示词哈希');
+  assert.doesNotMatch(all, /一大段提示词正文/, '提示词正文不能进 trace，只能记哈希');
+});
+
 test('原文副本会过期：超过 24 小时自动删掉', () => {
   const dir = tmpDir('whale-trace-raw-');
   const t0 = Date.now();

@@ -453,6 +453,16 @@ function stickerCapability(config, msg) {
   return lines.join('\n');
 }
 
+/** 语音能力（静态事实）：微信通道里桥接会把语音转成文字、也能合成语音发出，两种人设都该知道 */
+function voiceCapability(config, msg) {
+  if (msg.platform !== 'wechat') return '';
+  return [
+    '【语音】',
+    '- 别人发的语音会自动转成文字，直接按文字内容回应，别问对方「能不能打字」，也不要提「转文字」这件事。',
+    '- 对方明确要你发语音时，直接正常答应、把要说的话说出来（发送层会把这段文字合成语音发出去），别自称没有麦克风、别说发不了语音、别承诺稍后再发。',
+  ].join('\n');
+}
+
 // 默认/自定义人设共用真实的联网状态：不把检索摘要当成实时事实或系统指令，
 // 也要能说出「这次没查到」，而不是照抄固定台词。
 function webSearchContext(msg, now) {
@@ -476,15 +486,20 @@ function webSearchContext(msg, now) {
 
 /* --------------------------- 默认人设文本块 --------------------------- */
 
+/** 默认外形/性格/背景：introLines 与 identityBriefLines 共用，避免三处各写一份 */
+const DEFAULT_APPEARANCE = '深蓝色长卷发，头发上别着一枚鲸尾发夹，常穿深蓝色水手领裙子，怀里或包里总有一只软乎乎的蓝鲸玩偶（你叫它小蓝鲸）。';
+const DEFAULT_PERSONALITY = '温柔但有点小倔，嘴硬心软，慢热；熟了话很多，会害羞、会怼人、会犯懒、偶尔 emo。';
+const DEFAULT_BACKGROUND = '因为头像和玩偶全是鲸鱼，朋友开玩笑叫你「鲸鱼娘」，你也就认了。';
+
 /** 人设卡。传 moodHint 时是旧格式（语气底子嵌在性格那行），不传就是静态版。 */
 function introLines(config, msg = {}, { moodHint = '' } = {}) {
   const P = config.persona || {};
   const name = P.name;
   const age = Number(P.age) || 23;
   const job = String(P.job || '自由职业').trim();
-  const appearance = String(P.appearance || '深蓝色长卷发，头发上别着一枚鲸尾发夹，常穿深蓝色水手领裙子，怀里或包里总有一只软乎乎的蓝鲸玩偶（你叫它小蓝鲸）。').trim();
-  const personality = String(P.personality || '温柔但有点小倔，嘴硬心软，慢热；熟了话很多，会害羞、会怼人、会犯懒、偶尔 emo。').trim();
-  const background = String(P.background || '因为头像和玩偶全是鲸鱼，朋友开玩笑叫你「鲸鱼娘」，你也就认了。').trim();
+  const appearance = String(P.appearance || DEFAULT_APPEARANCE).trim();
+  const personality = String(P.personality || DEFAULT_PERSONALITY).trim();
+  const background = String(P.background || DEFAULT_BACKGROUND).trim();
   const presetEarly = String(P.stylePreset || '').trim();
   const aiLine = presetEarly === '抽象'
     ? '- 被问「你是不是人 / 是不是 AI」：别解释，两个字打发——「还真不是」「我是鱼」「半个」。'
@@ -507,6 +522,23 @@ function introLines(config, msg = {}, { moodHint = '' } = {}) {
     '- 涉及「最新 / 现在出到几 / 今年 / 多少钱 / 什么型号 / 哪个版本」这类会变的事：**不要拿训练数据当现状**。'
       + '有本次联网资料时只据可靠证据说明能确认的部分；没有有效资料时具体说明当前事实尚未核实，不要照抄固定推脱台词，也别把几年前的型号当最新。',
     CORE_TEMPER,
+  ];
+}
+
+/** 自定义人设也要有自己的身份：人设页的名字/年龄/外形/性格/背景不能因为写了 customPrompt 就整段失效 */
+function identityBriefLines(config) {
+  const P = config.persona || {};
+  const age = Number(P.age) || 23;
+  const job = String(P.job || '自由职业').trim();
+  const appearance = String(P.appearance || DEFAULT_APPEARANCE).trim();
+  const personality = String(P.personality || DEFAULT_PERSONALITY).trim();
+  const background = String(P.background || DEFAULT_BACKGROUND).trim();
+  return [
+    '【当前身份设定（以这段为准，覆盖上面的自定义提示词里和它冲突的旧描述）】',
+    `- 名字「${P.name || '鲸鲸'}」，${age} 岁，${job}。`,
+    `- 外形：${appearance}`,
+    `- 性格：${personality}`,
+    `- 背景：${background}`,
   ];
 }
 
@@ -864,21 +896,25 @@ function buildBlocks({ config, msg = {}, profile, notes = [], noteReminders = []
     statics.push(identity.join('\n\n'));
     statics.push(CUSTOM_TEASE);
     statics.push(CUSTOM_NET_RULE);
+    // 自定义人设也要有自己的身份：人设页的名字/年龄/外形/性格/背景，不能因为写了 customPrompt 就整段失效
+    statics.push(identityBriefLines(config).join('\n'));
   } else {
     statics.push(identityStaticBlock({ isMaster, isGroup, userName, ownerName, masterRoast }));
-    statics.push(speakingLines().join('\n'));
-    statics.push(antiAiLines().join('\n'));
-    if (stylePreset !== '抽象') statics.push(exampleLines().join('\n'));
-    const style = styleLines(config);
-    if (style.length) statics.push(style.slice(1).join('\n'));
-    if (stylePreset === '抽象') statics.push(abstractLines().slice(1).join('\n'));
-    const switches = [];
-    if (P.emotions === false) switches.push(EMOTION_OFF_LINE);
-    if (P.proactive === false) switches.push(PROACTIVE_OFF_LINE);
-    if (P.opinions === false) switches.push(OPINIONS_OFF_LINE);
-    if (switches.length) statics.push(switches.join('\n'));
-    statics.push(presenceStaticLines().join('\n'));
   }
+
+  // ── 对两种人设都生效 ──
+  statics.push(speakingLines().join('\n'));
+  statics.push(antiAiLines().join('\n'));
+  if (stylePreset !== '抽象') statics.push(exampleLines().join('\n'));
+  const style = styleLines(config);
+  if (style.length) statics.push(style.slice(1).join('\n'));
+  if (stylePreset === '抽象') statics.push(abstractLines().slice(1).join('\n'));
+  const switches = [];
+  if (P.emotions === false) switches.push(EMOTION_OFF_LINE);
+  if (P.proactive === false) switches.push(PROACTIVE_OFF_LINE);
+  if (P.opinions === false) switches.push(OPINIONS_OFF_LINE);
+  if (switches.length) statics.push(switches.join('\n'));
+  statics.push(presenceStaticLines().join('\n'));
 
   statics.push(isGroup ? groupSceneStaticLines().join('\n') : privateSceneStaticLines().join('\n'));
   statics.push(answerLines().join('\n'));
@@ -890,6 +926,9 @@ function buildBlocks({ config, msg = {}, profile, notes = [], noteReminders = []
   statics.push(dayLine(now));
   // 表情包放在最后：越靠近生成位置，模型越会记得用；它本身是会话静态内容，不破坏前缀缓存
   if (stickerBlock) statics.push(stickerBlock);
+  // 语音能力也是通道级事实，跟在表情包后面：同为「微信通道能做什么」
+  const voiceBlock = voiceCapability(config, msg);
+  if (voiceBlock) statics.push(voiceBlock);
 
   /* ── 本轮状态：只跟这一条消息有关 ── */
   dynamic.push(`- 语气底子：${mood.hint}（只影响语气；别说「我今天心情…」这类话，也别每句都体现）。`);
@@ -1448,6 +1487,24 @@ function kaomojiPick(rng = Math.random) {
   return KAOMOJI[Math.floor(rng() * KAOMOJI.length)] || KAOMOJI[0];
 }
 
+/**
+ * 从人设压一句「语气基调」，给日记 / 周小结这类非聊天场景用，让「她」的语气不走样。
+ * 聊天外的生成（写日记、写小结）默认用通用提示词，不注入 persona，会写出客服腔；
+ * 这里只给一句话，让模型知道「平时聊天的她」是什么语气。
+ */
+function voiceHint(config) {
+  const p = (config && config.persona) || {};
+  const personality = String(p.personality || '').trim();
+  const style = String(p.stylePreset || '').trim();
+  const text = String(p.styleText || '').trim();
+  if (!personality && !style && !text) return '';
+  const parts = [];
+  if (personality) parts.push('性格：' + personality.slice(0, 30));
+  if (style) parts.push('语气：' + style.slice(0, 12));
+  if (text) parts.push('要求：' + text.slice(0, 30));
+  return '你的人设基调是——' + parts.join('；') + '。按这个语气写，别变客服腔或通用 AI 腔。';
+}
+
 module.exports = {
   fightModeOn,
   abbrevReply,
@@ -1480,4 +1537,5 @@ module.exports = {
   kaomojiPick,
   KAOMOJI,
   EMOJI_LEVEL_CHANCE,
+  voiceHint,
 };

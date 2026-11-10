@@ -58,6 +58,8 @@ module.exports = function register(router) {
     if (!patch) return json(res, 400, { ok: false, error: '这个人设预设是空的' });
     // 记下来源，页面上能直接看到「现在用的是哪一版」
     patch.sourcePreset = preset.id;
+    // 版本号也一起记（id@version），trace/诊断能回答「她这次照哪一版说的」
+    patch.personaVersion = preset.id + '@' + (preset.version || '?');
     // 导入预设同样做一次精确 token 校验，避免导进一个会顶爆单轮上限的人设
     const tokenCheck = await checkPersonaTokens(runtime, patch);
     if (tokenCheck.overLimit) {

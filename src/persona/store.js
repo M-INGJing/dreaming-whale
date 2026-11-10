@@ -112,6 +112,7 @@ function save(config, patch) {
     background: config.persona ? config.persona.background : undefined,
     customPrompt: config.persona ? config.persona.customPrompt : undefined,
     sourcePreset: config.persona ? config.persona.sourcePreset : undefined,
+    personaVersion: config.persona ? config.persona.personaVersion : undefined,
   };
   for (const k of Object.keys(base)) if (base[k] === undefined) delete base[k];
   const next = { ...base, ...load(config), ...patchObj };
@@ -176,6 +177,7 @@ const DEFAULTS = {
   // 旧值会一直盖在控件人设上面，表现出来就是「点了恢复默认还是没变」。
   customPrompt: '',
   sourcePreset: '',
+  personaVersion: '',
 };
 
 function clear(config) {
@@ -249,6 +251,8 @@ function apply(config, data) {
   if (data.customPrompt !== undefined) config.persona.customPrompt = String(data.customPrompt || '');
   // 记下「这份人设是从哪个人设文件导入的」，页面上直接显示，免得用户不知道自己现在用的是哪版
   if (data.sourcePreset !== undefined) config.persona.sourcePreset = String(data.sourcePreset || '');
+  // 导入的预设版本（id@version）：只进 trace/诊断，不参与提示词，方便回答「她这次照哪一版说的」
+  if (data.personaVersion !== undefined) config.persona.personaVersion = String(data.personaVersion || '');
   return config;
 }
 
@@ -277,6 +281,7 @@ function summary(config) {
     background: config.persona.background,
     customPrompt: config.persona.customPrompt || '',
     sourcePreset: config.persona.sourcePreset || '',
+    personaVersion: config.persona.personaVersion || '',
   };
 }
 

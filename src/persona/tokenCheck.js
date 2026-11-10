@@ -36,7 +36,7 @@ function previewConfig(config, patch = {}) {
   const c = preview.chat || {};
   const g = preview.group || {};
   const direct = ['name', 'age', 'job', 'appearance', 'personality', 'background', 'customPrompt',
-    'emotions', 'proactive', 'opinions', 'masterRoast', 'sourcePreset'];
+    'emotions', 'proactive', 'opinions', 'masterRoast', 'sourcePreset', 'personaVersion'];
   for (const key of direct) if (patch[key] !== undefined) p[key] = patch[key];
   if (patch.preset !== undefined) {
     p.stylePreset = patch.preset;

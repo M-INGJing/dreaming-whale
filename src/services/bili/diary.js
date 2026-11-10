@@ -15,6 +15,7 @@
 const path = require('node:path');
 const biliStore = require('../../infra/biliStore');
 const diaryFormat = require('../../core/bili/diaryFormat');
+const persona = require('../../persona');
 
 const SYSTEM = [
   '你在给自己写「今天」的日记，只输出 JSON，不要解释。',
@@ -142,6 +143,8 @@ async function writeRound(opts = {}) {
   let owner = '';
   let self = '';
   let usedModel = false;
+  // 用她的人设语气写，别让日记里的「她」变成客服腔
+  const voice = persona.voiceHint(config);
   if (llm && !llm.isMock) {
     const material = [
       '日期：' + state.date + '，现在 ' + clockOf(date),
@@ -152,7 +155,7 @@ async function writeRound(opts = {}) {
       previousSelf ? '今天给自己的日记已经写过：' + previousSelf.slice(0, 400) : '',
     ].filter(Boolean).join('\n\n');
     try {
-      const raw = await llm.complete({ system: SYSTEM, turns: [{ role: 'user', content: material }] });
+      const raw = await llm.complete({ system: SYSTEM + (voice ? '\n' + voice : ''), turns: [{ role: 'user', content: material }] });
       const parsed = parseModelOutput(raw);
       if (parsed) { owner = parsed.owner; self = parsed.self; usedModel = true; }
     } catch (err) {

@@ -56,6 +56,18 @@ test('writeRound：第一次写当天，只有一节', async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('writeRound：有人设时，把语气基调注入写日记的提示词', async () => {
+  const { config, root } = tmpConfig();
+  config.persona = { personality: '温柔但有点小倔', stylePreset: '正常' };
+  let seenSystem = '';
+  const llm = { isMock: false, complete: async (opts) => { seenSystem = opts.system; return '{"owner":"今天看了猫。","self":"喜欢猫。"}'; } };
+  const out = await diary.writeRound({ config, llm, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  assert.equal(out.usedModel, true);
+  assert.match(seenSystem, /温柔但有点小倔/);
+  assert.match(seenSystem, /语气：正常/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('writeRound：同一天看了新视频 → 重写当天那一节（不是追加），两件事都在同一篇里', async () => {
   const { config, root } = tmpConfig();
   const first = await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });

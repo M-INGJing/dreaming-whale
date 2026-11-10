@@ -15,7 +15,6 @@ const assert = require('node:assert/strict');
 
 const { extractEpisode } = require('../src/memory/extractor');
 const { LlmError, FRIENDLY } = require('../src/llm/client');
-
 const messages = [
   { role: 'user', uid: 'u1', name: '小海', text: '最近在换工作，压力挺大，想换个环境', id: 'msg_1' },
   { role: 'assistant', uid: 'bot', name: '鲸鲸', text: '慢慢来，别把自己逼太紧' },
@@ -83,4 +82,11 @@ test('返回不是可解析 JSON：warn「疑似截断」，不静默降级', as
   const line = logs.map(([, m]) => m).join('\n');
   assert.ok(line.includes('不是可解析 JSON'), line);
   assert.ok(line.includes('疑似截断'), line);
+});
+
+test('EPISODE_SYSTEM：把鲸鲸的语气当作人设，不当成情绪基调写进记忆', () => {
+  const { EPISODE_SYSTEM } = require('../src/memory/extractor');
+  assert.match(EPISODE_SYSTEM, /「鲸鲸」是助手（她自己）的名字/);
+  assert.match(EPISODE_SYSTEM, /不是对任何人的负面或正面评价/);
+  assert.match(EPISODE_SYSTEM, /facts \/ traits 只写发言人列表里的其他人/);
 });

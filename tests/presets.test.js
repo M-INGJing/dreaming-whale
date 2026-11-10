@@ -72,6 +72,16 @@ test('导入只取白名单字段，带不进乱七八糟的东西', () => {
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 6, retryDelay: 60 });
 });
 
+test('基线预设 customPrompt 为空时，patch 也要带空串，才能清掉旧预设', () => {
+  const root = makeRoot();
+  writePreset(root, 'persona-base.json', { id: 'persona-base', name: '基线', customPrompt: '', text: '像群友聊天' });
+  const preset = presets.load({ paths: { root } }, 'persona-base');
+  const patch = presets.toPatch(preset);
+  assert.equal(patch.customPrompt, '', '空 customPrompt 也要进 patch，导入时才能清掉旧预设的自定义提示词');
+  assert.equal(patch.text, '像群友聊天');
+  fs.rmSync(root, { recursive: true, force: true, maxRetries: 6, retryDelay: 60 });
+});
+
 test('id 里带路径穿越取不到东西', () => {
   const root = makeRoot();
   writePreset(root, 'persona-v1.json', { id: 'persona-v1', customPrompt: 'ok' });
@@ -90,6 +100,6 @@ test('仓库自带的 persona-standard 是通用版：不含微信号、群昵�
     const text = JSON.stringify(preset);
     assert.doesNotMatch(text, /wxid_gk6o4|wxid_[a-z0-9]{10,}|sk-[A-Za-z0-9]{10}/, item.id + ' 里疑似有隐私');
     assert.doesNotMatch(text, /1[3-9]\d{9}|[\w.+-]+@[\w-]+\.[a-z]{2,}/i, item.id + ' 里疑似有手机号/邮箱');
-    assert.ok(String(preset.customPrompt || '').length > 100, item.id + ' 应该有完整提示词');
+    assert.ok(String(preset.customPrompt || '').length > 100 || item.id === 'persona-standard', item.id + ' 应该有完整提示词（standard 是基线，customPrompt 可为空）');
   }
 });

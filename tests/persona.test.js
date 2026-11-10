@@ -112,6 +112,55 @@ test('自定义人设按已认证关系轻调语气，不强制敷衍或撒娇',
   }
 });
 
+test('自定义人设下，人设页的姓名/年龄/外形/性格/背景仍会进提示词', () => {
+  // 回归：以前 customPrompt 非空就跳过 introLines，改外形/性格/年龄存得下却一行都不进 prompt
+  const cfg = {
+    ...config,
+    persona: {
+      ...config.persona,
+      customPrompt: '你是鲸鲸，保持一点俏皮。',
+      name: '鲸鲸',
+      age: 17,
+      job: '学生',
+      appearance: '粉色短发，戴着一顶鲸鱼帽子。',
+      personality: '高冷、话少、嘴硬。',
+      background: '住在海边的转学生。',
+    },
+  };
+  const sys = assemblePrompt({
+    config: cfg,
+    msg: { chatType: 'private', senderName: '小海' },
+    now: new Date('2024-05-01T14:30:00'),
+  }).prompt;
+  assert.ok(sys.startsWith(cfg.persona.customPrompt), '自定义提示词原文仍要放在最前面');
+  assert.match(sys, /粉色短发/);
+  assert.match(sys, /高冷/);
+  assert.match(sys, /17 岁/);
+  assert.match(sys, /住在海边的转学生/);
+});
+
+test('自定义人设仍注入「怎么说话」和「AI 味黑名单」', () => {
+  // 回归：以前这两块只在非自定义分支，模板被迫在 customPrompt 里各抄一份
+  const sys = assemblePrompt({
+    config: { ...config, persona: { ...config.persona, customPrompt: '你是鲸鲸。' } },
+    msg: { chatType: 'private', senderName: '小海' },
+    now: new Date('2024-05-01T14:30:00'),
+  }).prompt;
+  assert.match(sys, /怎么说话/);
+  assert.match(sys, /不写小作文/);
+  assert.match(sys, /AI 味太重/);
+  assert.match(sys, /作为一个 AI/);
+});
+
+test('voiceHint：给日记/小结压一句人设语气，没有人设时为空', () => {
+  assert.equal(persona.voiceHint({}), '');
+  assert.equal(persona.voiceHint({ persona: {} }), '');
+  const hint = persona.voiceHint({ persona: { personality: '温柔但有点小倔', stylePreset: '正常', styleText: '' } });
+  assert.match(hint, /温柔但有点小倔/);
+  assert.match(hint, /语气：正常/);
+  assert.match(hint, /别变客服腔/);
+});
+
 test('深夜心情自动变困', () => {
   const late = persona.moodFor(new Date('2024-05-01T02:00:00'));
   assert.equal(late.name, '有点困');

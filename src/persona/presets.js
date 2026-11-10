@@ -81,7 +81,10 @@ function toPatch(preset) {
   if (preset.appearance) patch.appearance = str(preset.appearance, 400);
   if (preset.personality) patch.personality = str(preset.personality, 500);
   if (preset.background) patch.background = str(preset.background, 500);
-  if (preset.customPrompt) patch.customPrompt = str(preset.customPrompt, 6000);
+  // customPrompt 始终带：空字符串 = 「恢复基线」——导入 standard 这类基线预设时，
+  // 必须把旧预设写进 customPrompt 的内容清掉（save() 的 explicitClear 靠它识别）。
+  // 以前用 if (preset.customPrompt) 会跳过空串，导入基线就清不掉旧自定义提示词。
+  patch.customPrompt = str(preset.customPrompt, 6000);
   if (preset.preset) patch.preset = str(preset.preset, 20);
   if (preset.text) patch.text = str(preset.text, 300);
   if (preset.age) patch.age = Math.max(1, Math.min(120, Number(preset.age) || 23));

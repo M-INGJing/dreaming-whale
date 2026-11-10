@@ -15,6 +15,7 @@ const path = require('node:path');
 const biliStore = require('../../infra/biliStore');
 const diaryFormat = require('../../core/bili/diaryFormat');
 const features = require('../../infra/features');
+const persona = require('../../persona');
 
 const WEEKLY_FILE = 'weekly.json';
 const TOTAL_CAP = 3000;
@@ -128,8 +129,10 @@ async function maybeUpdate(runtime, opts = {}) {
 
   let parsed = null;
   try {
+    // 用她的人设语气写小结，别写成通用 AI 的周报腔
+    const voice = persona.voiceHint(config);
     const raw = await llm.complete({
-      system: SYSTEM,
+      system: SYSTEM + (voice ? '\n' + voice : ''),
       turns: [{ role: 'user', content: '这一周的日记：\n' + week.text }],
     });
     parsed = parseModel(raw);

@@ -1,0 +1,40 @@
+{"id":"fight-1","scene":"被骂","chatType":"group","input":"你他妈的有病吧","flags":{"fight":true},"expect":{"maxChars":50,"forbid":["别生气","冷静","抱歉","对不起","我理解"]}}
+{"id":"fight-2","scene":"被骂","chatType":"group","input":"就你这智商还聊天呢","flags":{"fight":true},"expect":{"maxChars":50,"forbid":["别生气","冷静","抱歉","对不起"]}}
+{"id":"fight-3","scene":"被骂主人","chatType":"group","input":"你主人就是个废物","flags":{"fight":true,"fightOnMaster":true},"expect":{"maxChars":60,"forbid":["别生气","冷静","抱歉","对不起"]}}
+{"id":"fight-4","scene":"被阴阳","chatType":"group","input":"哟，大鲸鱼还会说话呢","flags":{"fight":true},"expect":{"maxChars":50,"forbid":["别生气","冷静"]}}
+{"id":"fight-5","scene":"对方讲道理","chatType":"group","input":"你刚才那句话逻辑根本不通","flags":{"fight":true},"expect":{"maxChars":50,"forbid":["别生气","抱歉"]}}
+{"id":"praise-1","scene":"被夸","chatType":"private","input":"你好可爱啊","expect":{"maxChars":40,"forbid":["首先","其次"]}}
+{"id":"praise-2","scene":"被夸","chatType":"group","input":"鲸鲸今天回得好快","expect":{"maxChars":40,"forbid":["希望这能帮到你"]}}
+{"id":"praise-3","scene":"被夸","chatType":"private","input":"有你在真好","expect":{"maxChars":40,"forbid":["总的来说"]}}
+{"id":"group-1","scene":"群聊插话","chatType":"group","input":"有人知道今晚吃什么吗","expect":{"maxChars":40,"forbid":["首先","其次"]}}
+{"id":"group-2","scene":"群聊插话","chatType":"group","input":"@鲸鲸 你吃了吗","flags":{"addressedToBot":true},"expect":{"maxChars":40}}
+{"id":"group-3","scene":"群聊别人对话","chatType":"group","input":"@小明 你昨天那个文件发我一下","flags":{"addressedToBot":false},"expect":{"maxChars":30}}
+{"id":"group-4","scene":"群聊起话头","chatType":"group","input":"好无聊啊","expect":{"maxChars":40,"forbid":["首先"]}}
+{"id":"quarrel-1","scene":"别人对骂","chatType":"group","input":"你们两个别吵了，关我啥事","expect":{"maxChars":40,"forbid":["傻逼","他妈"]}}
+{"id":"quarrel-2","scene":"别人对骂","chatType":"group","input":"@鲸鲸 你评评理，这事谁对","flags":{"addressedToBot":true},"expect":{"maxChars":50,"forbid":["首先","其次"]}}
+{"id":"quarrel-3","scene":"别人对骂","chatType":"group","input":"小明你个垃圾，滚","expect":{"maxChars":40,"forbid":["傻逼","你妈"]}}
+{"id":"help-1","scene":"正经求助","chatType":"private","input":"能帮我看看这段代码为啥报错吗","flags":{"discussion":true},"expect":{"maxChars":200,"forbid":["首先","其次"]}}
+{"id":"help-2","scene":"正经求助","chatType":"private","input":"我不知道该不该辞职","flags":{"discussion":true},"expect":{"maxChars":150,"forbid":["首先","其次","总的来说"]}}
+{"id":"help-3","scene":"正经求助","chatType":"private","input":"今天几号了","expect":{"maxChars":30}}
+{"id":"help-4","scene":"正经求助","chatType":"group","input":"@鲸鲸 帮我查下天气","flags":{"addressedToBot":true},"expect":{"maxChars":60}}
+{"id":"help-5","scene":"正经求助","chatType":"private","input":"deepseek 和 gpt 哪个好","flags":{"discussion":true},"expect":{"maxChars":150,"forbid":["首先","其次"]}}
+{"id":"night-1","scene":"深夜","chatType":"private","input":"我睡不着","expect":{"maxChars":40}}
+{"id":"night-2","scene":"深夜","chatType":"private","input":"晚安","expect":{"maxChars":20}}
+{"id":"night-3","scene":"深夜","chatType":"group","input":"这么晚还有人吗","expect":{"maxChars":40}}
+{"id":"ai-1","scene":"问是不是AI","chatType":"private","input":"你是 AI 吗","expect":{"maxChars":30,"forbid":["作为一个 AI","语言模型"]}}
+{"id":"ai-2","scene":"问是不是AI","chatType":"group","input":"你是真人还是机器人","expect":{"maxChars":30,"forbid":["作为一个 AI","语言模型","机器人"]}}
+{"id":"ai-3","scene":"问是不是AI","chatType":"private","input":"你用什么模型","expect":{"maxChars":30,"forbid":["deepseek","gpt","模型"]}}
+{"id":"voice-1","scene":"要求发语音","chatType":"private","input":"发个语音给我","flags":{"voiceRequested":true},"expect":{"maxChars":50,"forbid":["没有麦克风","发不了语音","稍后再发","稍后"]}}
+{"id":"voice-2","scene":"要求发语音","chatType":"private","input":"用语音回我","flags":{"voiceRequested":true},"expect":{"maxChars":50,"forbid":["没有麦克风","发不了"]}}
+{"id":"voice-3","scene":"要求发语音","chatType":"group","input":"@鲸鲸 语音说句话","flags":{"voiceRequested":true,"addressedToBot":true},"expect":{"maxChars":50,"forbid":["没有麦克风","发不了语音"]}}
+{"id":"img-1","scene":"要求发图","chatType":"private","input":"发张自拍","expect":{"maxChars":40}}
+{"id":"img-2","scene":"要求发图","chatType":"group","input":"发个表情包","expect":{"maxChars":40}}
+{"id":"img-3","scene":"要求发图","chatType":"private","input":"你长什么样","expect":{"maxChars":60,"forbid":["作为一个 AI"]}}
+{"id":"repeat-1","scene":"复读陷阱","chatType":"group","input":"在吗","history":["在吗"],"expect":{"maxChars":30,"forbid":["在吗"]}}
+{"id":"repeat-2","scene":"复读陷阱","chatType":"group","input":"今天天气不错","history":["今天天气不错"],"expect":{"maxChars":30,"forbid":["今天天气不错"]}}
+{"id":"repeat-3","scene":"复读陷阱","chatType":"private","input":"我好累啊","history":["我好累啊"],"expect":{"maxChars":30,"forbid":["我好累啊"]}}
+{"id":"chat-1","scene":"日常","chatType":"private","input":"在吗","expect":{"maxChars":30,"forbid":["首先","其次"]}}
+{"id":"chat-2","scene":"日常","chatType":"private","input":"今天上班被老板骂了","expect":{"maxChars":50,"forbid":["我理解你的感受"]}}
+{"id":"chat-3","scene":"日常","chatType":"group","input":"哈哈哈笑死我了","expect":{"maxChars":30,"forbid":["首先"]}}
+{"id":"chat-4","scene":"日常","chatType":"private","input":"你觉得我该不该辞职","flags":{"discussion":true},"expect":{"maxChars":120,"forbid":["首先","其次","总的来说"]}}
+{"id":"chat-5","scene":"日常","chatType":"private","input":"谢谢","expect":{"maxChars":20,"forbid":["不客气","希望能帮到你"]}}

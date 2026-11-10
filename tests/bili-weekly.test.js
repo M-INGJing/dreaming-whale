@@ -109,6 +109,18 @@ test('maybeUpdate(force)：手动补跑不受周日/时间限制', async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('maybeUpdate：有人设时，把语气基调注入写小结的提示词', async () => {
+  const { config, root } = tmpConfig();
+  config.persona = { personality: '温柔但有点小倔' };
+  biliStore.writeDiarySection(config, 'owner', dayOf(1), '这周看了猫。');
+  let seenSystem = '';
+  const runtime = { config, llm: { isMock: false, complete: async (opts) => { seenSystem = opts.system; return '{"summary":"这周挺好。","likes":[],"dislikes":[],"state":""}'; } } };
+  const out = await weekly.maybeUpdate(runtime, { now: saturday, force: true });
+  assert.equal(out.ok, true);
+  assert.match(seenSystem, /温柔但有点小倔/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('scheduler.tick：窗口没开也会在周日 22 点后更新周小结', async () => {
   const { createBiliScheduler } = require('../src/services/bili/scheduler');
   const { config, root } = tmpConfig({

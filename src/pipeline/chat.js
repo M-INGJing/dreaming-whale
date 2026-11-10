@@ -375,6 +375,8 @@ class Bot {
           msg: decision.msg || this.normalize(rawMsg),
           decision,
           state: this._lastTraceState || null,
+          personaVersion: (this.config && this.config.persona && this.config.persona.personaVersion) || '',
+          system: decision.system || '',
         });
       }
     } catch { /* 追踪失败不影响回消息 */ }
