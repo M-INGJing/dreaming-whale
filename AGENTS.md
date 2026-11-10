@@ -25,7 +25,7 @@ Copy-Item launcher/publish/WhaleLauncher.exe .\WhaleLauncher.exe -Force
 
 - 本机没有 .NET SDK 时：只提交源码，并在回复里明确写「EXE 待发布」，**不要**假装 EXE 已更新。
 - CI 的 `tests.yml` 会 `dotnet build` 校验 launcher 编译；`installer.yml` 在 `test/**` 分支构建安装包（不含正式发布）。
-- 详细打包 / 签名流程见 `CONTRIBUTING.md` 第四节和 `docs/打包与签名.md`。
+- 详细打包 / 签名流程见 `CONTRIBUTING.md` 第四节和 `docs/打包与签名.md`；本机构建启动器 EXE 的完整步骤（装 SDK、发布、常见错误）见 `docs/构建启动器EXE.md`。
 
 ## 2. 代码与测试
 

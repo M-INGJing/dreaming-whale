@@ -55,6 +55,7 @@ git push origin fix/一句话说明
 
 - 改 `launcher/` 之后要重新发布：`dotnet publish launcher/WhaleLauncher.csproj -c Release -o launcher/publish -p:PublishSingleFile=true -p:SelfContained=false`，
   再把 `launcher/publish/WhaleLauncher.exe` 覆盖到仓库根目录（根目录那份是直接发给用户的成品）。
+  详细步骤（装 SDK、验证、常见错误）见 `docs/构建启动器EXE.md`。
 - 安装包**只在 GitHub Actions 构建**（`.github/workflows/installer.yml`，手动 `workflow_dispatch` 或推 `v*` tag）；
   本机不跑 `ISCC`，也不提交 `dist/` 里的安装包。
 - 改了安装脚本 / 打包排除表 / CI，至少跑一次 `installer` 流水线并看烟测结果。
