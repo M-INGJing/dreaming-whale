@@ -174,6 +174,20 @@ test('writeRound(chat)：距上次更新太近时跳过（chatMinGapMinutes）',
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('writeRound(chat)：手动执行可以突破每日重写上限', async () => {
+  const { config, root } = tmpConfig({ maxRewritesPerDay: 1, chatMinGapMinutes: 0 });
+  await diary.writeRound({ config, llm: null, date: day, watched: [{ candidate: candidate('BV1xx411c7mD', '猫猫'), digest: '' }] });
+  const blocked = await diary.writeRound({
+    config, llm: null, date: day, watched: [], chatDigest: '【私聊】小明：今天加班', source: 'chat',
+  });
+  assert.equal(blocked.skipped, 'rewrite_cap');
+  const manual = await diary.writeRound({
+    config, llm: null, date: day, watched: [], chatDigest: '【私聊】小明：今天加班', source: 'chat', manual: true,
+  });
+  assert.equal(manual.rewritten, true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('scheduler：跑一轮时把当天聊天素材一起交给日记', async () => {
   const { createBiliScheduler } = require('../src/services/bili/scheduler');
   const { root } = tmpConfig();

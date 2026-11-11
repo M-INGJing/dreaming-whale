@@ -44,14 +44,17 @@ test('listDays：把日记、看过的视频（标题来自 feed 日志）、分
     { at: d1.toISOString(), kind: 'share_sent', bvid: 'BV1xx411c7mD' },
     { at: d2.toISOString(), kind: 'wake', watched: ['BV3xx411c7mD'] },
   ].map((x) => JSON.stringify(x)).join('\n') + '\n');
+  fs.writeFileSync(p.state, JSON.stringify({ date: '2026-11-08', updatedAt: d2.getTime() + 1234, rewrites: 1 }));
 
   const out = diaryView.listDays(config, { days: 10 });
   assert.equal(out.days.length, 2);
   assert.equal(out.days[0].date, '2026-11-08', '新的在前');
   assert.equal(out.days[0].owner, '今天看了 AI 视频。');
   assert.equal(out.days[0].self, '更喜欢实测。');
+  assert.equal(out.days[0].updatedAt, d2.getTime() + 1234, '最后更新时间要能显示');
   assert.deepEqual(out.days[0].watched, [{ bvid: 'BV3xx411c7mD', title: 'AI 实测', score: 7 }]);
   assert.equal(out.days[1].date, '2026-11-07');
+  assert.equal(out.days[1].updatedAt, 0);
   assert.equal(out.days[1].watched[0].title, '猫猫日常');
   assert.equal(out.days[1].shares, 1);
   fs.rmSync(path.dirname(config.paths.dataDir), { recursive: true, force: true });

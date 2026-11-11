@@ -105,6 +105,7 @@ const FIELDS = {
   'bili.diary.maxCharsPerDay': { type: 'int', min: 0, max: 20000 },
   'bili.diary.maxEntriesPerDay': { type: 'int', min: 1, max: 50 },
   'bili.diary.maxRewritesPerDay': { type: 'int', min: 0, max: 50 },
+  'bili.diary.maxOutputTokens': { type: 'int', min: 800, max: 8000 },
   'bili.diary.chatChance': { type: 'float', min: 0, max: 1 },
   'bili.diary.chatIdleSeconds': { type: 'int', min: 0, max: 3600 },
   'bili.diary.chatMinGapMinutes': { type: 'int', min: 0, max: 1440 },

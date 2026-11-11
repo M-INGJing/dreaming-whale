@@ -96,6 +96,8 @@ function listDays(config, opts = {}) {
   const p = biliStore.paths(config);
   const owner = splitSections(biliStore.readText(p.diaryOwner));
   const self = splitSections(biliStore.readText(p.diarySelf));
+  let diaryState = {};
+  try { diaryState = JSON.parse(readTextSafe(p.state)) || {}; } catch { diaryState = {}; }
   const events = eventsByDay(config);
   const titles = biliStore.readTitles(config);
   const dates = new Set([...Object.keys(owner), ...Object.keys(self), ...events.keys()]);
@@ -109,12 +111,14 @@ function listDays(config, opts = {}) {
         const row = feeds.get(bvid) || {};
         return { bvid, title: row.title || titles[bvid] || '', score: row.score || 0 };
       });
+      const updatedAt = diaryState && diaryState.date === date ? Number(diaryState.updatedAt) || 0 : 0;
       return {
         date,
         owner: owner[date] || '',
         self: self[date] || '',
         watched,
         shares: ev.shares,
+        updatedAt,
       };
     }),
   };

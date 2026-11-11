@@ -132,7 +132,7 @@ async function writeRound(opts = {}) {
     }
   }
   const maxRewrites = Math.max(0, Number(cfg.maxRewritesPerDay) || 0);
-  if (maxRewrites && state.rewrites >= maxRewrites) {
+  if (!manual && maxRewrites && state.rewrites >= maxRewrites) {
     return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'rewrite_cap' };
   }
 
@@ -157,11 +157,18 @@ async function writeRound(opts = {}) {
       previousSelf ? '今天给自己的日记已经写过：' + previousSelf.slice(0, 400) : '',
     ].filter(Boolean).join('\n\n');
     try {
-      const raw = await llm.complete({ system: SYSTEM + (voice ? '\n' + voice : ''), turns: [{ role: 'user', content: material }] });
+      // 日记是长文生成：思考档容易把预算吃光返回空（日志：reasoning_tokens=2000、
+      // finish=length），这里明确关思考并给足输出预算，避免一直退回模板。
+      const raw = await llm.complete({
+        system: SYSTEM + (voice ? '\n' + voice : ''),
+        turns: [{ role: 'user', content: material }],
+        thinking: false,
+        maxTokens: Math.max(1600, Number(cfg.maxOutputTokens) || 2200),
+      });
       const parsed = parseModelOutput(raw);
       if (parsed) { owner = parsed.owner; self = parsed.self; usedModel = true; }
     } catch (err) {
-      logger?.warn?.('[bili] 日记模型失败，用模板：' + ((err && err.code) || 'unknown'));
+      logger?.warn?.('[bili] 日记模型失败，用模板：' + ((err && (err.code || err.message)) || 'unknown'));
     }
   }
   if (!owner) owner = templateOwner(fresh, titles, previousOwner, chatDigest);

@@ -29,6 +29,8 @@ public sealed class BiliPage : UserControl, IRefreshable
     readonly Border qrBox = new() { Visibility = Visibility.Collapsed, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(8) };
     readonly TextBlock qrHint = new() { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
     readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
+    // 页面停留时定期刷新日记/说话习惯：手动执行能力后不用离开页面再回来才能看到变化
+    readonly DispatcherTimer liveTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     readonly Button qrButton;
     readonly TextBlock statusText = new() { TextWrapping = TextWrapping.Wrap };
     readonly TextBlock runResult = new() { TextWrapping = TextWrapping.Wrap };
@@ -241,8 +243,18 @@ public sealed class BiliPage : UserControl, IRefreshable
         ((StackPanel)about.Child).Children.Add(Note("登录后可读公开视频的字幕与热评（没有字幕的视频会明确标注「没看到画面」）。第一版没有点赞/评论/私信，后续阶段见 docs/B站养鱼计划.md。"));
 
         timer.Tick += async (_, _) => await PollAsync();
-        Unloaded += (_, _) => timer.Stop();
-        Loaded += async (_, _) => await RefreshAsync();
+        liveTimer.Tick += async (_, _) =>
+        {
+            if (!_sup.NodeRunning) return;
+            try
+            {
+                await LoadDiaryAsync();
+                await LoadStyleAsync();
+            }
+            catch { /* 后台刷新失败不弹窗，下一次 tick 再试 */ }
+        };
+        Unloaded += (_, _) => { timer.Stop(); liveTimer.Stop(); };
+        Loaded += async (_, _) => { liveTimer.Start(); await RefreshAsync(); };
     }
 
     Border Card(string heading = null, string hint = null)
@@ -563,8 +575,9 @@ public sealed class BiliPage : UserControl, IRefreshable
             var ownerLen = Text(d, "owner").Length;
             var selfLen = Text(d, "self").Length;
             var shares = d.TryGetProperty("shares", out var sh) && sh.ValueKind == JsonValueKind.Number ? sh.GetInt64() : 0;
+            var updatedAt = d.TryGetProperty("updatedAt", out var ua) && ua.ValueKind == JsonValueKind.Number ? ua.GetInt64() : 0;
             sb.Append(Text(d, "date")).Append('|').Append(watched).Append('|').Append(ownerLen)
-              .Append('|').Append(selfLen).Append('|').Append(shares).Append(';');
+              .Append('|').Append(selfLen).Append('|').Append(shares).Append('|').Append(updatedAt).Append(';');
         }
         return sb.ToString();
     }
@@ -606,7 +619,11 @@ public sealed class BiliPage : UserControl, IRefreshable
         }
         var owner = Text(d, "owner");
         var self = Text(d, "self");
-        var text = string.Join(" ｜ ", parts) + " ｜ 分享 " + shares + " 条\n\n【看过的视频】\n" + string.Join("\n", lines);
+        var updatedAt = d.TryGetProperty("updatedAt", out var ua) && ua.ValueKind == JsonValueKind.Number ? ua.GetInt64() : 0;
+        var updatedText = updatedAt > 0
+            ? " ｜ 最后更新 " + DateTimeOffset.FromUnixTimeMilliseconds(updatedAt).ToLocalTime().ToString("HH:mm:ss")
+            : "";
+        var text = string.Join(" ｜ ", parts) + " ｜ 分享 " + shares + " 条" + updatedText + "\n\n【看过的视频】\n" + string.Join("\n", lines);
         if (owner.Length > 0) text += "\n\n【写给主人】\n" + owner;
         if (self.Length > 0) text += "\n\n【只给自己】\n" + self;
         diaryText.Text = text;

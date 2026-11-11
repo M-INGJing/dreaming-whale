@@ -248,7 +248,7 @@ const DEFAULT_CONFIG = {
     risk: { minGapMs: 1500, readHourly: 120, readDaily: 400, writeHourly: 0, writeDaily: 0, writeGapSec: 120 },
     diary: {
       enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 400,
-      maxCharsPerDay: 3000, maxEntriesPerDay: 4, maxRewritesPerDay: 8,
+      maxCharsPerDay: 3000, maxEntriesPerDay: 4, maxRewritesPerDay: 8, maxOutputTokens: 2200,
       // 聊天后：按概率记一个「等会儿写日记」的待办，等真正闲下来再写（回复优先）
       chatChance: 0.15, chatIdleSeconds: 180, chatMinGapMinutes: 90,
     },
