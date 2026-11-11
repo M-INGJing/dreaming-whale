@@ -259,6 +259,7 @@ function createBiliScheduler(opts = {}) {
             const queued = outbox.enqueue(cfg, {
               bvid: best.candidate.bvid,
               title: best.candidate.title,
+              cover: bili.share.card === false ? '' : (best.candidate.cover || ''),
               text: composed.text,
               target,
             });

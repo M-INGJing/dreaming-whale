@@ -146,6 +146,8 @@ function enqueue(config, job) {
     at: Date.now(),
     bvid,
     title: String(job.title || '').slice(0, 120),
+    // 封面图卡片的素材：桥接用它合成卡片再发；没有就退回纯文字
+    cover: /^https?:\/\//i.test(String(job.cover || '')) ? String(job.cover).slice(0, 500) : '',
     text: text.slice(0, 300),
     chatType: target.chatType === 'group' ? 'group' : 'private',
     chatId: target.chatId,

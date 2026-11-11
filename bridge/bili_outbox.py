@@ -6,8 +6,12 @@
 """
 
 
-def watch_once(get_json, post_json, send_text, log=None):
-    """跑一轮。返回 'idle' / 'sent' / 'failed' / 'claim_failed' / 'error'。"""
+def watch_once(get_json, post_json, send_text, log=None, send_image=None, make_card=None):
+    """跑一轮。返回 'idle' / 'sent' / 'failed' / 'claim_failed' / 'error'。
+
+    send_image / make_card 可选：有封面时先发一张「封面卡片」图，再发文字链接。
+    图片失败不影响文字（最多回到原来的纯文字分享）。
+    """
     try:
         data = get_json('/api/bili/pending') or {}
     except Exception as exc:  # noqa: BLE001 - 网络异常只跳过这一轮
@@ -35,6 +39,22 @@ def watch_once(get_json, post_json, send_text, log=None):
     if not text or not chat_id:
         _ack(post_json, job_id, 'failed', 'bad_job', log)
         return 'failed'
+    # 先发封面卡片（可选）：微信原生链接卡片是协议层的，UIA 做不到；
+    # 用「封面 + 标题」合成图近似卡片效果，图片发完再补文字链接。
+    if send_image and job.get('cover'):
+        try:
+            maker = make_card
+            if maker is None:
+                import share_card as share_card_module
+                maker = share_card_module.make_card
+            card_path = maker(job, log=log)
+            if card_path:
+                card_ok = bool(send_image(card_path, name, chat_id))
+                if log:
+                    log('B 站分享：封面卡片%s' % ('已发' if card_ok else '没发成，改发纯文字'))
+        except Exception as exc:  # noqa: BLE001 - 卡片失败绝不影响文字
+            if log:
+                log('B 站分享：封面卡片失败（%s），改发纯文字' % type(exc).__name__)
     try:
         ok = bool(send_text(text, name, chat_id))
     except Exception as exc:  # noqa: BLE001

@@ -202,7 +202,7 @@ test('调度器：一次醒着会按目标逐条入队（私聊 + 白名单群�
   const sched = createBiliScheduler({
     config,
     now: () => now,
-    fetchFeed: async () => ({ source: 'rcmd', items: [{ bvid: 'BV1xx411c7mD', title: '猫猫', durationSec: 60, pubdate: 0, stat: { view: 1000000 } }] }),
+    fetchFeed: async () => ({ source: 'rcmd', items: [{ bvid: 'BV1xx411c7mD', title: '猫猫', durationSec: 60, pubdate: 0, stat: { view: 1000000 }, cover: 'https://i0.hdslb.com/cover.jpg' }] }),
     readVideo: async () => '【B站视频】猫猫',
     writeDiary: async () => ({ ownerChars: 1, selfChars: 1, usedModel: false }),
   });
@@ -211,6 +211,7 @@ test('调度器：一次醒着会按目标逐条入队（私聊 + 白名单群�
   assert.equal(out.share.length, 2, '私聊 + 群各一条');
   const items = JSON.parse(fs2.readFileSync(path.join(root, 'data', 'bili', 'outbox.json'), 'utf8')).items;
   assert.deepEqual(items.map((i) => i.chatType).sort(), ['group', 'private']);
+  assert.equal(items[0].cover, 'https://i0.hdslb.com/cover.jpg', '封面要传下去给桥接做卡片');
   fs2.rmSync(root, { recursive: true, force: true });
 });
 

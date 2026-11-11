@@ -86,6 +86,7 @@ const FIELDS = {
   'bili.share.daily': { type: 'int', min: 0, max: 20 },
   'bili.share.minGapMinutes': { type: 'int', min: 0, max: 1440 },
   'bili.share.silentAfterDays': { type: 'int', min: 0, max: 60 },
+  'bili.share.card': { type: 'bool' },
   'bili.risk.minGapMs': { type: 'int', min: 0, max: 10000 },
   'bili.risk.readHourly': { type: 'int', min: 0, max: 5000 },
   'bili.risk.readDaily': { type: 'int', min: 0, max: 50000 },

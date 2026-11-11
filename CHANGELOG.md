@@ -178,6 +178,14 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 新增 · B 站分享改成「封面卡片 + 短链接」
+
+- 微信原生链接卡片是协议层 appmsg，UIA 只能粘贴文字；这里改为桥接侧用封面合成一张卡片图（封面 + 标题 + BV 号 + bilibili.com），先发图、再发原来的分享文案（含链接），视觉上接近群里转发的卡片。
+- 内核：`outbox.enqueue` 带上 `cover`（只接受 http(s)），调度器从候选视频取封面；`bili.share.card`（默认 true）可关掉，关掉就退回纯文字。
+- 桥接：新增 `share_card.make_card()`（Pillow 下载封面、裁 16:9、画标题，失败返回 None）；`bili_outbox.watch_once` 先 `send_image` 再 `send_text`，图片失败自动退回文字；`sender_mixin.send_image_file()` 走微信图片发送。
+- 文件：卡片落在 `data/bili/share-cards/<job>.jpg`；生成/发送失败都只记日志，不影响分享到达。
+- 测试：`tests/test_bili_outbox.py` 增加 4 条（先图后文、图片失败仍发文字、无封面跳过、卡片生成失败退回），`tests/test_share_card.py` 3 条（尺寸/换行/无封面）。
+
 ### 修复 · 鲸鲸发了 B 站分享却否认（动作账本没有 share）
 
 - 原因：分享的 ack 只往聊天记录补了一条 assistant 消息，**【最近做过的事】动作账本里没有 share**；而提示词又要求「发没发只看动作账本，记录里没有的不要声称做过」，于是她看到历史里自己的分享也照样否认。

@@ -515,6 +515,27 @@ class SenderMixin:
             G.log_error('发送最终失败，请把微信窗口保持在桌面、别最小化（这条 %d 字，正文不写日志）' % len(text))
             return False
 
+    def send_image_file(self, path, chat_display_name, chat_username=''):
+        """发一张本地图片（B 站分享的封面卡片）。失败返回 False，调用方继续发文字。"""
+        if not self.account_send_allowed('图片'):
+            return False
+        with self.send_lock:
+            try:
+                with self.gui_lock:
+                    if self.gui is None:
+                        self.gui = self.WeChatGUI()
+                    self.bind_gui_window(self.gui)
+                hwnd = int(self.ACCOUNT.get('hwnd') or 0) or self.find_weixin_hwnd()
+                if hwnd:
+                    self.normalize_window(hwnd)
+                res = self.gui.send_image(str(path), who=chat_display_name, verify=False)
+                ok = bool(res)
+                G.log('图片发送%s → %s' % ('成功' if ok else '失败', chat_display_name))
+                return ok
+            except Exception as e:  # noqa: BLE001 - 图片失败不影响文字
+                G.log('图片发送异常：', repr(e))
+                return False
+
     def send_at(self, member, text, chat_display_name, chat_username=''):
         """在群里真 @ 某个成员（UI 选人），失败返回 False 让调用方退回普通发送。"""
         if not member or not text:

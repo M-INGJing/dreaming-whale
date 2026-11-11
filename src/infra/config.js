@@ -242,7 +242,7 @@ const DEFAULT_CONFIG = {
       maxWakesPerDay: 2,
       maxMinutes: 45,
     },
-    share: { enabled: true, minScore: 13, daily: 3, minGapMinutes: 120, silentAfterDays: 3, chats: [] },
+    share: { enabled: true, minScore: 13, daily: 3, minGapMinutes: 120, silentAfterDays: 3, card: true, chats: [] },
     risk: { minGapMs: 1500, readHourly: 120, readDaily: 400, writeHourly: 0, writeDaily: 0, writeGapSec: 120 },
     diary: {
       enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 400,

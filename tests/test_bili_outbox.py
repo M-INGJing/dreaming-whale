@@ -47,8 +47,21 @@ class Send:
         return self.ok
 
 
+class SendImage:
+    def __init__(self, ok=True, raises=None):
+        self.ok = ok
+        self.raises = raises
+        self.calls = []
+
+    def __call__(self, path, name, chat_id):
+        self.calls.append((path, name, chat_id))
+        if self.raises:
+            raise self.raises
+        return self.ok
+
+
 def item(**kw):
-    base = {'id': 'job-1', 'text': '看了个视频 https://www.bilibili.com/video/BV1xx411c7mD/', 'chatId': 'wxid_owner', 'chatType': 'private', 'name': ''}
+    base = {'id': 'job-1', 'bvid': 'BV1xx411c7mD', 'text': '看了个视频 https://www.bilibili.com/video/BV1xx411c7mD/', 'chatId': 'wxid_owner', 'chatType': 'private', 'name': ''}
     base.update(kw)
     return base
 
@@ -92,6 +105,46 @@ class BiliShareBridge(unittest.TestCase):
         self.assertEqual(watch_once(k.get_json, k.post_json, s), 'sent')
         self.assertEqual(s.calls[0][2], 'example-group@chatroom')
         self.assertEqual(k.acks[-1]['status'], 'sent')
+
+    def test_cover_card_sent_before_text(self):
+        k = FakeKernel(item=item(cover='https://i0.hdslb.com/cover.jpg'))
+        s = Send(ok=True)
+        img = SendImage(ok=True)
+        made = []
+
+        def make_card(job, log=None):
+            made.append(job.get('bvid'))
+            return 'data/bili/share-cards/job-1.jpg'
+
+        self.assertEqual(watch_once(k.get_json, k.post_json, s, send_image=img, make_card=make_card), 'sent')
+        self.assertEqual(made, ['BV1xx411c7mD'])
+        self.assertEqual(img.calls, [('data/bili/share-cards/job-1.jpg', '', 'wxid_owner')])
+        self.assertEqual(s.calls, [('看了个视频 https://www.bilibili.com/video/BV1xx411c7mD/', '', 'wxid_owner')])
+        self.assertEqual(k.acks[-1]['status'], 'sent')
+
+    def test_image_failure_still_sends_text(self):
+        k = FakeKernel(item=item(cover='https://i0.hdslb.com/cover.jpg'))
+        s = Send(ok=True)
+        img = SendImage(raises=RuntimeError('uia down'))
+        self.assertEqual(watch_once(k.get_json, k.post_json, s, send_image=img, make_card=lambda job, log=None: 'x.jpg'), 'sent')
+        self.assertEqual(len(s.calls), 1, '图片失败不能挡住文字')
+        self.assertEqual(k.acks[-1]['status'], 'sent')
+
+    def test_no_cover_skips_image(self):
+        k = FakeKernel(item=item())
+        s = Send(ok=True)
+        img = SendImage()
+        self.assertEqual(watch_once(k.get_json, k.post_json, s, send_image=img, make_card=lambda job, log=None: 'x.jpg'), 'sent')
+        self.assertEqual(img.calls, [])
+        self.assertEqual(len(s.calls), 1)
+
+    def test_card_generation_none_falls_back_to_text(self):
+        k = FakeKernel(item=item(cover='https://i0.hdslb.com/cover.jpg'))
+        s = Send(ok=True)
+        img = SendImage()
+        self.assertEqual(watch_once(k.get_json, k.post_json, s, send_image=img, make_card=lambda job, log=None: None), 'sent')
+        self.assertEqual(img.calls, [])
+        self.assertEqual(len(s.calls), 1)
 
 
 if __name__ == '__main__':

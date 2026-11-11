@@ -12,6 +12,7 @@ class LoopMixin:
         「取一条 → 领取 → 发送 → 回执」，发送失败也回执 failed，绝不自作主张重发。
         """
         import bili_outbox as share_transport
+        import share_card
         base = self.sticker_base
         headers = self.sticker_headers
 
@@ -26,7 +27,11 @@ class LoopMixin:
         while True:
             G.time.sleep(30)
             try:
-                share_transport.watch_once(get_json, post_json, self.send_text, G.log)
+                share_transport.watch_once(
+                    get_json, post_json, self.send_text, G.log,
+                    send_image=self.send_image_file,
+                    make_card=share_card.make_card,
+                )
             except Exception as exc:  # noqa: BLE001 - 分享失败不许影响收发
                 G.log_throttled('bili-share-error', 'B 站分享循环异常：%r' % (exc,), ttl=300)
 
