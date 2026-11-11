@@ -94,6 +94,8 @@ function createBiliScheduler(opts = {}) {
       ? (async (config, url, deps) => ({ digest: await opts.readVideo(config, url, deps), replies: [] }))
       : ((config, url, deps) => biliWatch.readMaterials(config, url, deps)));
   const writeDiary = opts.writeDiary || diaryService.writeRound;
+  // 高分视频「看画面」：默认走 frames.describe（ffmpeg 抽帧 + 视觉模型）；测试可注入桩。
+  const captureFrames = opts.captureFrames || ((config, info, deps) => require('./frames').describe(config, info, deps));
 
   let timer = null;
   let running = false;
@@ -187,15 +189,39 @@ function createBiliScheduler(opts = {}) {
       const deep = Math.min(2, ranked.length);
       const watched = [];
       const repliesPool = [];
+      const framesCfg = bili.frames || {};
+      const framesEnabled = framesCfg.enabled !== false;
+      const framesMinScore = Math.max(0, Number(framesCfg.minScore) || 20);
+      const framesMax = Math.max(0, Number(framesCfg.maxPerRun) || 0);
+      let framesUsed = 0;
       for (let i = 0; i < deep; i += 1) {
         const candidate = ranked[i].candidate;
         let digest = '';
+        let info = null;
         try {
           const materials = await readMaterials(cfg, candidate.bvid, { logger });
           digest = (materials && materials.digest) || '';
+          info = (materials && materials.info) || null;
           for (const row of (materials && materials.replies) || []) repliesPool.push(row);
         } catch (err) {
           logger?.warn?.('[bili] 读视频失败 code=' + (err && err.code ? err.code : 'unknown'));
+        }
+        // 高分视频额外「看画面」：抽九宫格 + 视觉描述，拼进同一份资料里。
+        // 失败只记事件，不影响文字资料（没画面就说没画面，不能编）。
+        if (framesEnabled && info && ranked[i].score >= framesMinScore && framesUsed < framesMax) {
+          try {
+            const visual = await captureFrames(cfg, info, { logger });
+            if (visual) {
+              digest += '\n\n画面观察（九宫格截帧）：' + visual;
+              framesUsed += 1;
+              biliStore.appendEvent(cfg, { kind: 'frames', bvid: candidate.bvid, ok: true });
+            } else {
+              biliStore.appendEvent(cfg, { kind: 'frames', bvid: candidate.bvid, ok: false, reason: 'empty' });
+            }
+          } catch (err) {
+            biliStore.appendEvent(cfg, { kind: 'frames', bvid: candidate.bvid, ok: false, reason: String((err && err.code) || 'error') });
+            logger?.warn?.('[bili] 截帧失败：' + ((err && err.code) || 'unknown'));
+          }
         }
         watched.push({ candidate, digest });
       }

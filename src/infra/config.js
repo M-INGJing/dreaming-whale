@@ -243,6 +243,8 @@ const DEFAULT_CONFIG = {
       maxMinutes: 45,
     },
     share: { enabled: true, minScore: 13, daily: 3, minGapMinutes: 120, silentAfterDays: 3, card: true, chats: [] },
+    // 高分视频「看画面」：ffmpeg 抽九宫格 + 视觉模型描述；没有 ffmpeg/看图 Key 自动退回文字
+    frames: { enabled: true, minScore: 20, grid: '3x3', tile: 720, maxPerRun: 2, maxMinutes: 20, descriptionChars: 400 },
     risk: { minGapMs: 1500, readHourly: 120, readDaily: 400, writeHourly: 0, writeDaily: 0, writeGapSec: 120 },
     diary: {
       enabled: true, ownerTitle: '鲸鲸的今天', selfTitle: '只给自己看', digestTokens: 400,

@@ -335,3 +335,36 @@ bridge: 每 30s GET /api/bili/pending → 对每条 POST /api/bili/claim → sen
 - Cookie 刷新：`SESSDATA` 过期时（`nav` 返回未登录）提示重新扫码，不静默重试。
 
 
+
+## 12. 看画面：抽帧 + 视觉模型
+
+早期「读视频」只读标题/简介/字幕/热评，不看画面，所以没字幕的视频只能靠标题猜。
+现在对**高分视频**额外抽帧看画面（参考 `D:\workspace\whale\dsh-bili-whale` 的 `watch-video`）：
+
+```
+view 拿 cid/时长
+ → x/player/playurl（platform=pc&qn=80，拿普通 mp4 直链）
+ → 流式下载到 data/bili/frames/.<bvid>.mp4
+ → ffmpeg 场景检测（阈值 0.3 → 0.15 → 0.08）拿变化点
+ → 等间隔骨架 + 每帧吸附到 ±半格内最近变化点
+ → 抽 N 帧（3x3=9）拼成一张九宫格 jpg（data/bili/frames/<bvid>.jpg）
+ → 视觉模型（src/adapters/vision.js）描述画面
+ → 「画面观察（九宫格截帧）：…」拼进 digest，供日记/分享/聊天使用
+```
+
+- 只对 `score >= bili.frames.minScore`（默认 20）的视频抽，每轮最多 `maxPerRun`（默认 2）条；
+- 超过 `maxMinutes`（默认 20 分钟）的视频不抽，避免下载整部电影；
+- ffmpeg 不随仓库打包：通过 `$FFMPEG`、PATH、`D:\ffmpeg\bin`、`~/.dsh/bili-whale/bin` 定位；找不到就只读文字（日志提示一次）；
+- 下载/抽帧/视觉任何一步失败都只记事件（kind=frames），不影响文字资料、日记和分享；
+- 视觉 Key 走现有「看图」配置；没有 Key 时画面描述为空。
+
+配置：
+
+```jsonc
+"bili": { "frames": {
+  "enabled": true, "minScore": 20, "grid": "3x3",
+  "tile": 720, "maxPerRun": 2, "maxMinutes": 20, "descriptionChars": 400
+} }
+```
+
+测试：tests/bili-frames.test.js（抽帧时间点/场景解析/超长跳过/真实 ffmpeg 出图）、调度器集成（高分抽帧拼进 digest、关闭后不抽）。

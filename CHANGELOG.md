@@ -2,6 +2,13 @@
 
 ## 4.0.8
 
+### 改进 · 私聊连发消息合并再回
+
+- 私聊里对方把一句话分几条发时，第一条到达后先等 1.5 秒窗口，把窗口内的后续消息合并成一轮再回，不再「发一条就回一条」。
+- 只对私聊生效；群聊、`/` 开头的命令、图片/语音保持原行为。
+- 配置 `wechat.debounceMs`（默认 1500，0 = 关闭），也可用环境变量 `WHALE_DEBOUNCE_MS` 覆盖。
+- 桥接自检新增 3 条防抖用例（`scripts/bridge-pipeline-selftest.py`）。
+
 ### 移除 · 启动器更新提示与自动更新
 
 - 启动器不再联网检查版本，也没有「有新版本」横幅、检查更新按钮和更新进度条；顶栏不再显示版本号。
@@ -177,6 +184,14 @@
 - `examples/uia_compat.py`：点完会话行后多读几次 `current_chat` 再决定是否回退搜索框，避免微信 4.2 的瞬时 `None` 触发 10 秒搜索兜底。
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
+
+### 新增 · 高分 B 站视频真的「看画面」（ffmpeg 抽帧 + 视觉模型）
+
+- 参考 `dsh-bili-whale` 的 `watch-video`：`playurl` 取直链 → 流式下载 → ffmpeg 场景检测（0.3/0.15/0.08）→ 等间隔骨架 + 吸附变化点 → 抽 9 帧拼 3x3 → 视觉模型描述。
+- 新增 `src/services/bili/frames.js`：ffmpeg 定位、场景解析、时间点选择、抽帧拼图、视觉描述；任何失败只记 `kind=frames` 事件，不影响文字资料/日记/分享。
+- 调度器：每轮对 `score >= minScore`（默认 20）的高分视频抽帧，最多 `maxPerRun`（默认 2）条；超过 `maxMinutes`（默认 20）跳过；画面描述拼进 digest（「画面观察（九宫格截帧）」）。
+- 配置：`bili.frames.{enabled,minScore,grid,tile,maxPerRun,maxMinutes,descriptionChars}`；ffmpeg 通过 `$FFMPEG`/PATH/`D:\ffmpeg\bin` 等定位，不随仓库打包。
+- 测试：`tests/bili-frames.test.js` 8 条（含真实 ffmpeg 出图、超长跳过、调度器集成）；文档补 `docs/B站养鱼计划.md` 第 12 节。
 
 ### 修复 · 群聊里让她「刷个视频分享给我」只有答应、没有分享
 
