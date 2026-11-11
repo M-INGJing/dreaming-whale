@@ -20,6 +20,44 @@ function chatKey(item) {
  * @param {object} item outbox 里 ack 之后的条目 { id, text, chatType, chatId, bvid }
  * @returns {boolean} 是否写入
  */
+function shareDetail(item) {
+  const title = String((item && item.title) || '').slice(0, 60);
+  const bvid = String((item && item.bvid) || '');
+  return 'B 站视频《' + (title || bvid) + '》' + (bvid ? '（' + bvid + '）' : '');
+}
+
+function hasShareEvent(store, key, item) {
+  try {
+    const events = typeof store.events === 'function' ? store.events(key, 20) : [];
+    return (events || []).some((e) => e && e.type === 'share' && String(e.detail || '').includes(String(item.bvid || '')));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 【最近做过的事】只认 store 的动作账本；B 站分享的 ack 在桥接/路由层，
+ * 以前只写了聊天记录，于是提示词里「记录里根本没有的事不要承认」让她否认自己发过。
+ * 这里补一条 share 事件，和表情包/文字发送走同一套事实来源。
+ */
+function ensureShareEvent(runtime, key, item) {
+  const store = runtime && runtime.store;
+  if (!store || typeof store.appendEvent !== 'function') return false;
+  if (hasShareEvent(store, key, item)) return false;
+  try {
+    store.appendEvent(key, {
+      type: 'share',
+      detail: shareDetail(item),
+      status: 'confirmed',
+      ts: Date.now(),
+    });
+    return true;
+  } catch (err) {
+    runtime.logger?.warn?.('[bili] 分享动作记录写入失败：' + ((err && err.code) || 'memory'));
+    return false;
+  }
+}
+
 function record(runtime, item) {
   const store = runtime && runtime.store;
   const key = chatKey(item);
@@ -39,6 +77,7 @@ function record(runtime, item) {
       msgId: 'bili-share:' + String(item.id || item.bvid || text.length),
       source: 'bili-share',
     });
+    ensureShareEvent(runtime, key, item);
     runtime.logger?.info?.('[bili] 分享已写入聊天记忆：' + key + '（' + (item.bvid || '') + '）');
     return true;
   } catch (err) {
@@ -67,9 +106,15 @@ function backfill(runtime, opts = {}) {
     const key = chatKey(item);
     if (!key || !String(item.text || '').trim()) continue;
     const msgId = 'bili-share:' + String(item.id || item.bvid || '');
+    let duplicate = false;
     try {
-      if (typeof store.isDuplicate === 'function' && store.isDuplicate(key, msgId)) continue;
-    } catch { /* 查不了当没写过 */ }
+      duplicate = typeof store.isDuplicate === 'function' && store.isDuplicate(key, msgId);
+    } catch { duplicate = false; }
+    if (duplicate) {
+      // 聊天记录已经补过，但动作账本可能还缺——「最近做过的事」要靠它，缺了她还是会否认
+      ensureShareEvent(runtime, key, item);
+      continue;
+    }
     if (record(runtime, item)) restored += 1;
   }
   if (restored) runtime.logger?.info?.('[bili] 启动补记：' + restored + ' 条分享已写入聊天记忆');

@@ -2,6 +2,13 @@
 
 ## 4.0.8
 
+### 移除 · 启动器更新提示与自动更新
+
+- 启动器不再联网检查版本，也没有「有新版本」横幅、检查更新按钮和更新进度条；顶栏不再显示版本号。
+- 移除强制更新 / 熔断：客户端不再拉远端清单判定是否拦停，旧版本也不会被远程停用。
+- 删除 `launcher/UpdateService.cs`、`launcher/UpdateManifest.cs`、`release-manifest.json`，以及 `scripts/update.ps1`、`scripts/make-manifest.ps1`、`scripts/manifest-policy.js`、`scripts/migrate-data.ps1` 与对应测试、文档。
+- 发版资产只保留安装包与 `SHA256SUMS.txt`；升级方式改为下载新安装包覆盖安装（`data\` 与 `config.json` 不受影响）。
+
 ### 改进 · few-shot 示例改从真实对话抽样
 
 - 新增 `src/persona/fewShot.js`：从 `data/memory/chats/*/messages.jsonl` 抽「主人没纠正过」的回复当说话示例，替代硬编码那 4 组。
@@ -170,6 +177,12 @@
 - `examples/uia_compat.py`：点完会话行后多读几次 `current_chat` 再决定是否回退搜索框，避免微信 4.2 的瞬时 `None` 触发 10 秒搜索兜底。
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
+
+### 修复 · 鲸鲸发了 B 站分享却否认（动作账本没有 share）
+
+- 原因：分享的 ack 只往聊天记录补了一条 assistant 消息，**【最近做过的事】动作账本里没有 share**；而提示词又要求「发没发只看动作账本，记录里没有的不要声称做过」，于是她看到历史里自己的分享也照样否认。
+- 修复：`core/events.js` 增加 `share` 类型（「B 站分享」）；`shareMemory.record()` 在写聊天记录的同时写一条 `share` 事件（status=confirmed）；启动补记时，即使聊天记录已存在，也会补动作账本（`ensureShareEvent`）。
+- 效果：重启后今天的分享会以「B 站分享《标题》（BV…）—— 桥接确认发出」出现在提示词里，问她「你发的啥」会照实承认。
 
 ### 修复 · 微信最小化时「切了会话但没粘贴、消息没发出」
 

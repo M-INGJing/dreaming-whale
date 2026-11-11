@@ -15,8 +15,9 @@ test('chatKey：私聊/群聊分别映射到记忆会话 key', () => {
   assert.equal(shareMemory.chatKey({}), '');
 });
 
-test('record：分享成功后补一条 assistant 消息（她能在上下文里看到自己发过）', () => {
+test('record：分享成功后补一条 assistant 消息 + 一条动作账本（最近做过的事）', () => {
   const appended = [];
+  const events = [];
   const sessions = [];
   const runtime = {
     config: { persona: { name: '鲸鲸' } },
@@ -24,10 +25,13 @@ test('record：分享成功后补一条 assistant 消息（她能在上下文里
     store: {
       ensureSession: (key, meta) => sessions.push({ key, meta }),
       appendMessage: (key, msg) => appended.push({ key, msg }),
+      events: () => events,
+      appendEvent: (key, ev) => { events.push({ key, ...ev }); },
     },
   };
   const ok = shareMemory.record(runtime, {
-    id: 'job-1', bvid: 'BV1xx411c7mD', text: '看了个视频 https://www.bilibili.com/video/BV1xx411c7mD/',
+    id: 'job-1', bvid: 'BV1xx411c7mD', title: '猫猫日常',
+    text: '看了个视频 https://www.bilibili.com/video/BV1xx411c7mD/',
     chatType: 'private', chatId: 'wxid_a',
   });
   assert.equal(ok, true);
@@ -38,6 +42,10 @@ test('record：分享成功后补一条 assistant 消息（她能在上下文里
   assert.match(appended[0].msg.text, /BV1xx411c7mD/);
   assert.match(appended[0].msg.msgId, /^bili-share:/);
   assert.equal(appended[0].msg.source, 'bili-share');
+  assert.equal(events.length, 1, '必须同时写动作账本，否则提示词只认账本会让她否认');
+  assert.equal(events[0].type, 'share');
+  assert.match(events[0].detail, /猫猫日常/);
+  assert.equal(events[0].status, 'confirmed');
 });
 
 test('record：没有 store / 空文本时安静跳过', () => {
@@ -61,6 +69,7 @@ test('backfill：把最近 sent 的分享补进记忆；已写过的不重复', 
 
   const seen = new Set();
   const appended = [];
+  const events = [];
   const runtime = {
     config,
     logger: { info() {}, warn() {} },
@@ -68,11 +77,15 @@ test('backfill：把最近 sent 的分享补进记忆；已写过的不重复', 
       ensureSession() {},
       appendMessage(key, msg) { appended.push(msg); seen.add(key + '|' + msg.msgId); },
       isDuplicate: (key, msgId) => seen.has(key + '|' + msgId),
+      events: () => events,
+      appendEvent(key, ev) { events.push({ key, ...ev }); },
     },
   };
   assert.equal(shareMemory.backfill(runtime), 1);
   assert.equal(shareMemory.backfill(runtime), 0, '重复补记应跳过');
   assert.equal(appended.length, 1);
+  assert.equal(events.length, 1, '动作账本只该有一条');
+  assert.equal(events[0].type, 'share');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
