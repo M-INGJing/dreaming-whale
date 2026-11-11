@@ -165,6 +165,12 @@ test('writeRound(chat)：距上次更新太近时跳过（chatMinGapMinutes）',
   });
   assert.equal(out.rewritten, false);
   assert.equal(out.skipped, 'chat_cooldown');
+  // 手动执行（能力页「现在执行一次」）不受冷却限制
+  const manual = await diary.writeRound({
+    config, llm: null, date: day, watched: [], chatDigest: '【私聊】小明：今天加班', source: 'chat', manual: true,
+  });
+  assert.equal(manual.rewritten, true);
+  assert.equal(manual.source, 'chat');
   fs.rmSync(root, { recursive: true, force: true });
 });
 

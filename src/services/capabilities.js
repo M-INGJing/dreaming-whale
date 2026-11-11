@@ -204,6 +204,8 @@ const REGISTRY = [
         watched: [],
         chatDigest: digest,
         source: 'chat',
+        // 能力一定是「此刻有人明确让她写」，绕过聊天触发的冷却时间
+        manual: true,
       });
       if (!out || !out.rewritten) {
         return { ok: false, summary: '这次没写（' + ((out && out.skipped) || '没有新内容') + '）' };

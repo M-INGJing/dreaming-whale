@@ -178,9 +178,9 @@ test('run：刷视频并分享会往当前会话入队一条带封面的分享',
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('run：写日记能力用当天聊天素材更新当天那一篇', async () => {
+test('run：写日记能力用当天聊天素材更新，且手动执行不受冷却限制', async () => {
   const now = new Date(2026, 10, 9, 22, 0);
-  const { config, runtime, root } = tmpRuntime();
+  const { config, runtime, root } = tmpRuntime({ config: { bili: { diary: { enabled: true, chatMinGapMinutes: 90 } } } });
   runtime.store = {
     sessions: new Map([['wechat:u:wxid_a', {}]]),
     messages: () => [{ role: 'user', name: '小明', text: '今天加班到十点', ts: now.getTime() }],
@@ -190,5 +190,8 @@ test('run：写日记能力用当天聊天素材更新当天那一篇', async ()
   const owner = fs.readFileSync(biliStore.paths(config).diaryOwner, 'utf8');
   assert.match(owner, /## 2026-11-09/);
   assert.match(owner, /聊了会儿/);
+  // 冷却期内再点一次「现在执行一次」也应该真的写，而不是 chat_cooldown
+  const again = await capabilities.run(runtime, ['bili.diary.write'], { now });
+  assert.equal(again[0].ok, true, again[0].summary);
   fs.rmSync(root, { recursive: true, force: true });
 });

@@ -113,6 +113,7 @@ function parseModelOutput(raw) {
 async function writeRound(opts = {}) {
   const { config, llm, logger, date = new Date(), watched = [], chatDigest = '' } = opts;
   const source = opts.source === 'chat' ? 'chat' : 'watch';
+  const manual = opts.manual === true;
   const cfg = (config && config.bili && config.bili.diary) || {};
   if (cfg.enabled === false) return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'disabled' };
   const state = loadState(config, date);
@@ -120,12 +121,13 @@ async function writeRound(opts = {}) {
   const fresh = (watched || []).filter((w) => w && w.candidate && !seen.has(w.candidate.bvid));
   const hasChat = Boolean(String(chatDigest || '').trim());
   if (!fresh.length) {
-    // 聊天触发的更新：没有新视频也可以把「今天聊到的」写进去，但要和上次更新隔开
+    // 聊天触发的更新：没有新视频也可以把「今天聊到的」写进去，但要和上次更新隔开。
+    // 手动执行（能力页「现在执行一次」/ 明确让她写）不受冷却限制：那是用户此刻就要。
     if (source !== 'chat' || !hasChat) {
       return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'no_new_video' };
     }
     const gap = Math.max(0, Number(cfg.chatMinGapMinutes) || 0);
-    if (gap && state.updatedAt && Date.now() - state.updatedAt < gap * 60000) {
+    if (!manual && gap && state.updatedAt && Date.now() - state.updatedAt < gap * 60000) {
       return { ownerChars: 0, selfChars: 0, usedModel: false, rewritten: false, source, skipped: 'chat_cooldown' };
     }
   }

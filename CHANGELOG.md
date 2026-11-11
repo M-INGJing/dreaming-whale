@@ -185,6 +185,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 手动「写今天的日记」被聊天冷却挡住
+
+- 原因：23:33 刚由逛 B 站触发过当天日记，23:36 手动执行时命中 `chatMinGapMinutes=90` 的 `chat_cooldown`；手动执行和聊天触发走了同一套冷却。
+- 修复：`diary.writeRound` 新增 `manual` 参数；能力 `bili.diary.write`（能力页「现在执行一次」/ 聊天里明确让她写）固定传 `manual: true`，跳过冷却；聊天后的自动更新仍受 90 分钟冷却限制。
+- 测试：日记重写新增「冷却内手动可写」断言；能力测试改为冷却期内连点两次都能写。
+- 已手动补写 2026-11-11 日记（586 字；本次模型返回空、走模板兜底）。
+
 ### 新增 · 高分 B 站视频真的「看画面」（ffmpeg 抽帧 + 视觉模型）
 
 - 参考 `dsh-bili-whale` 的 `watch-video`：`playurl` 取直链 → 流式下载 → ffmpeg 场景检测（0.3/0.15/0.08）→ 等间隔骨架 + 吸附变化点 → 抽 9 帧拼 3x3 → 视觉模型描述。
