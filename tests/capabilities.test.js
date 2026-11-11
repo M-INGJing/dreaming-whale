@@ -33,7 +33,7 @@ test('detect/strip：识别能力标记并去掉，不留在正文里', () => {
 test('list/block：列出能力并带 UI 需要的状态；提示词只写能用的', () => {
   const { config } = tmpRuntime();
   const items = capabilities.list(config);
-  assert.deepEqual(items.map((x) => x.id), ['bili.watch', 'bili.diary.write']);
+  assert.deepEqual(items.map((x) => x.id), ['bili.watch', 'bili.watch.share', 'bili.diary.write']);
   assert.equal(items[0].available, true);
   assert.equal(items[0].enabled, true);
   assert.equal(items[0].maxPerDay, 5);
@@ -45,7 +45,7 @@ test('list/block：列出能力并带 UI 需要的状态；提示词只写能用
 
   const off = tmpRuntime({ config: { features: { bili: false } } }).config;
   const offItems = capabilities.list(off);
-  assert.equal(offItems.length, 2, 'UI 仍要显示，只是不可用');
+  assert.equal(offItems.length, 3, 'UI 仍要显示，只是不可用');
   assert.equal(offItems[0].available, false);
   assert.deepEqual(capabilities.promptItems(off), []);
   assert.equal(capabilities.block(off), '');
@@ -53,7 +53,7 @@ test('list/block：列出能力并带 UI 需要的状态；提示词只写能用
 
 test('block：日记关闭时提示词只保留逛 B 站', () => {
   const { config } = tmpRuntime({ config: { bili: { diary: { enabled: false } } } });
-  assert.deepEqual(capabilities.promptItems(config).map((x) => x.id), ['bili.watch']);
+  assert.deepEqual(capabilities.promptItems(config).map((x) => x.id), ['bili.watch', 'bili.watch.share']);
 });
 
 test('能力可以单独关掉、单独设每日上限', async () => {
@@ -64,7 +64,7 @@ test('能力可以单独关掉、单独设每日上限', async () => {
   const watch = items.find((x) => x.id === 'bili.watch');
   assert.equal(watch.enabled, false);
   assert.equal(watch.maxPerDay, 1);
-  assert.deepEqual(capabilities.promptItems(config).map((x) => x.id), ['bili.diary.write']);
+  assert.deepEqual(capabilities.promptItems(config).map((x) => x.id), ['bili.watch.share', 'bili.diary.write']);
   runtime.biliScheduler = { runRound: async () => ({ ok: true, watched: [], diary: { ownerChars: 0 } }) };
   const out = await capabilities.run(runtime, ['bili.watch'], { now: new Date(2026, 10, 9, 22, 0) });
   assert.equal(out[0].ok, false);
@@ -146,6 +146,35 @@ test('scheduler(noShare)：不往 outbox 写分享', async () => {
   assert.equal(out.share, null);
   const outboxFile = path.join(root, 'data', 'bili', 'outbox.json');
   assert.equal(fs.existsSync(outboxFile), false, '不应该入队分享');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('run：刷视频并分享会往当前会话入队一条带封面的分享', async () => {
+  const { config, runtime, root } = tmpRuntime({ config: { bili: { diary: { enabled: true }, share: { enabled: true, minScore: 0 } } } });
+  let captured = null;
+  runtime.biliScheduler = {
+    runRound: async (opts) => {
+      captured = opts;
+      return {
+        ok: true,
+        watched: ['BV1xx411c7mD'],
+        watchedInfo: [{ bvid: 'BV1xx411c7mD', title: '猫猫日常', cover: 'https://i0.hdslb.com/c.jpg', excerpt: '猫在打滚' }],
+        diary: { ownerChars: 10 },
+      };
+    },
+  };
+  const out = await capabilities.run(runtime, ['bili.watch.share'], {
+    now: new Date(2026, 10, 11, 22, 0),
+    msg: { chatId: 'wxid_a', chatType: 'private', senderName: 'shicm' },
+  });
+  assert.equal(out[0].ok, true);
+  assert.equal(captured.noShare, true, '看视频本身仍不自动群发，只发当前会话');
+  assert.match(out[0].summary, /已把《猫猫日常》分享到当前会话/);
+  const items = JSON.parse(fs.readFileSync(path.join(root, 'data', 'bili', 'outbox.json'), 'utf8')).items;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].chatId, 'wxid_a');
+  assert.equal(items[0].cover, 'https://i0.hdslb.com/c.jpg');
+  assert.match(items[0].text, /BV1xx411c7mD/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

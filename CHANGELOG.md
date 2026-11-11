@@ -178,6 +178,13 @@
 - 后台通道 `bg_sender`：已打开判定与切换后的确认统一走 `_chat_is_target`（成员集合），不再只认字符串完全相等。
 - 新增 `tests/test_uia_send_target.py`；`tests/test_bridge_names.py` 扩展为 symtable 级「未定义全局名」检查，覆盖 `bridge/` 与 `examples/`。
 
+### 修复 · 群聊里让她「刷个视频分享给我」只有答应、没有分享
+
+- 原因：`bili.watch` 能力一直传 `noShare=true`（设计上不主动分享），她确实看了视频，但 `share_skip reason=no_share`，所以群里看不到分享。
+- 新增能力 `bili.watch.share`（「刷视频并分享」）：拉推荐、看 2 条，再把第一条按当前会话（群/私聊）入队分享，带封面卡片；只在 `bili.share.enabled` 时出现。
+- 能力执行现在会带上触发它的消息（`ctx.msg`），分享目标就是当前会话；分享仍走 outbox/回执/记忆，桥接 30 秒内发出。
+- 更新 `docs/能力扩展规范.md` 现有能力表；新增/调整 `tests/capabilities.test.js` 9 条覆盖。
+
 ### 新增 · B 站分享改成「封面卡片 + 短链接」
 
 - 微信原生链接卡片是协议层 appmsg，UIA 只能粘贴文字；这里改为桥接侧用封面合成一张卡片图（封面 + 标题 + BV 号 + bilibili.com），先发图、再发原来的分享文案（含链接），视觉上接近群里转发的卡片。

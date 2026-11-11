@@ -300,6 +300,7 @@ function createBiliScheduler(opts = {}) {
         watchedInfo: watched.map((w) => ({
           bvid: w.candidate.bvid,
           title: String(w.candidate.title || '').slice(0, 80),
+          cover: String(w.candidate.cover || ''),
           excerpt: String(w.digest || '').replace(/^【B站视频】[^\n]*\n?/, '').slice(0, 200),
         })),
         diary, share: share && share.ok ? share.items : null,

@@ -229,8 +229,8 @@ function createRuntime({ root = path.resolve(__dirname, '..'), env = process.env
   try {
     const capabilities = require('./services/capabilities');
     runtime.capabilities = capabilities;
-    runtime.bot.runCapabilities = (ids) => {
-      capabilities.run(runtime, ids, { now: new Date() })
+    runtime.bot.runCapabilities = (ids, msg) => {
+      capabilities.run(runtime, ids, { now: new Date(), msg })
         .then((results) => {
           for (const row of results || []) {
             logger.info('[cap] ' + row.id + ' ' + (row.ok ? '完成' : '失败') + '：' + row.summary);

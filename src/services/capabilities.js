@@ -146,6 +146,48 @@ const REGISTRY = [
     },
   },
   {
+    id: 'bili.watch.share',
+    label: '刷视频并分享',
+    desc: '逛 B 站、挑一条视频分享到当前会话（对方明确要你「刷一个发我/分享给我」时用）',
+    enabled: (config) => features.isOn(config, 'bili') && ((config.bili && config.bili.share) || {}).enabled !== false,
+    async run(runtime, { now, msg }) {
+      const scheduler = runtime.biliScheduler;
+      if (!scheduler) return { ok: false, summary: 'B 站调度器没启动' };
+      const out = await scheduler.runRound({ dry: false, now, noShare: true });
+      if (!out || !out.ok) return { ok: false, summary: '这轮没看成（' + ((out && out.reason) || '未知') + '）' };
+      const info = Array.isArray(out.watchedInfo) ? out.watchedInfo[0] : null;
+      if (!info || !info.bvid) return { ok: false, summary: '看了但没拿到可分享的视频' };
+      const chatId = String((msg && (msg.chatId || msg.roomId)) || '').trim();
+      const chatType = msg && msg.chatType === 'group' ? 'group' : 'private';
+      if (!chatId) return { ok: false, summary: '不知道要分享到哪个会话' };
+      const shareService = require('./bili/share');
+      const outbox = require('./bili/outbox');
+      const composed = await shareService.composeShare({
+        llm: runtime.llm,
+        candidate: { bvid: info.bvid, title: info.title, durationSec: 0 },
+        chatType,
+      });
+      const target = {
+        chatType,
+        chatId,
+        name: String((msg && (msg.chatTitle || msg.senderName)) || '').trim(),
+      };
+      const queued = outbox.enqueue(runtime.config, {
+        bvid: info.bvid,
+        title: info.title,
+        cover: info.cover || '',
+        text: composed.text,
+        target,
+      });
+      if (!queued.ok) return { ok: false, summary: '没能入队分享（' + (queued.reason || 'unknown') + '）' };
+      return {
+        ok: true,
+        summary: '看了 ' + (Array.isArray(out.watchedInfo) ? out.watchedInfo.length : 0) + ' 条，已把《' + info.title + '》分享到当前会话',
+        detail: { items: [{ bvid: info.bvid, title: info.title, excerpt: info.excerpt || '' }] },
+      };
+    },
+  },
+  {
     id: 'bili.diary.write',
     label: '写今天的日记',
     desc: '把今天看过的、聊过的整理成当天那篇日记（只更新当天，不新开日期）',
@@ -282,7 +324,7 @@ async function run(runtime, ids, ctx = {}) {
     if (!entry) continue;
     let result;
     try {
-      result = await entry.run(runtime, { now });
+      result = await entry.run(runtime, { now, msg: ctx.msg });
     } catch (err) {
       result = { ok: false, summary: (err && err.code) || '执行失败' };
     }
