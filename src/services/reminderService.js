@@ -148,7 +148,7 @@ class ReminderService {
    * 新建提醒。任何人都能用（群友也行），但限流：同一会话最多 20 条未发、全局 500 条。
    * 规则和主动搭话一致：总开关、时间段、每天上限（这些都能在「提醒」页里单独改）。
    */
-  add({ wxid, name = '', chatType = 'private', text, at, atName = '', createdAt } = {}) {
+  add({ wxid, name = '', chatType = 'private', text, at, atName = '', createdAt, recur = '', month = 0, day = 0 } = {}) {
     const chatId = clean(wxid, 120);
     const what = clean(text, 200);
     const dueAt = at instanceof Date ? at.getTime() : Number(at);
@@ -181,6 +181,10 @@ class ReminderService {
       claimedAt: 0,
       retryAt: 0,
       finishedAt: 0,
+      // 每年重复的纪念日：recur='yearly' + 月/日；普通提醒留空
+      recur: recur === 'yearly' ? 'yearly' : '',
+      month: Number(month) || 0,
+      day: Number(day) || 0,
     };
     const previous = JSON.parse(JSON.stringify(this.items));
     this.items.push(item);
@@ -339,9 +343,28 @@ class ReminderService {
     const now = this.now();
     item.attempts = Number(item.attempts || 0) + 1;
     if (ok) {
-      item.status = 'done';
-      item.error = '';
-      item.finishedAt = now;
+      if (item.recur === 'yearly' && Number(item.month) >= 1 && Number(item.month) <= 12 && Number(item.day) >= 1 && Number(item.day) <= 31) {
+        // 每年重复的纪念日：顺延到明年，重新待发（不算新增，不占每日额度）
+        const next = new Date(new Date(now).getFullYear() + 1, Number(item.month) - 1, Number(item.day), 9, 0, 0);
+        item.status = 'pending';
+        item.dueAt = next.getTime();
+        item.attempts = 0;
+        item.error = '';
+        item.claimedAt = 0;
+        item.retryAt = 0;
+        item.finishedAt = 0;
+      } else {
+        item.status = 'done';
+        item.error = '';
+        item.finishedAt = now;
+      }
+      // 到点提醒也算「她做过的事」，写进「最近做过」，下一轮她能感知到（能力闭环第 3 条）
+      try {
+        require('./capabilities').recordActivity(this.config, {
+          id: 'reminder.sent', label: '到点提醒', ok: true,
+          summary: String(item.text || '').slice(0, 60),
+        }, new Date(now));
+      } catch { /* 记录失败不影响提醒发送 */ }
     } else if (item.attempts < 2 && now <= Number(item.dueAt) + RETRY_DELAY_MS) {
       item.status = 'retrying';
       item.retryAt = now + RETRY_DELAY_MS;

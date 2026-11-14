@@ -109,6 +109,14 @@ function record(config, entry, now = new Date()) {
   writeActions(config, items);
 }
 
+/**
+ * 统一「最近做过」入口：[[cap]]、命令、定时/主动调用都写这里，让她下一轮感知到
+ * （能力闭环第 3 条）。与 record 同源，语义上强调「非 [[cap]] 的活动也算数」。
+ */
+function recordActivity(config, entry, now) {
+  return record(config, entry, now);
+}
+
 /* ------------------------------ 能力实现 ------------------------------ */
 
 const REGISTRY = [
@@ -291,6 +299,7 @@ function block(config) {
  */
 const COMMAND_ABILITIES = [
   { label: '设提醒', hint: '对方说「十点半提醒我开会」，就登记，到点在会话里提醒' },
+  { label: '记纪念日', hint: '对方说「每年 3 月 8 日是我生日 / 5 月 20 号是我们认识的日子」，登记并每年到点提醒' },
   { label: '记待办', hint: '对方说「记一下 X」就加进待办清单；说「待办列表 / 完成待办 N」就查和勾掉' },
   { label: '报农历 / 节气', hint: '对方问「今天初几 / 什么节气 / 离过年还有几天」，直接答' },
   { label: '抽签 / 骰子 / 塔罗', hint: '对方说「抽个签 / 掷个骰子 / 塔罗」时，陪对方玩一下' },
@@ -360,5 +369,5 @@ async function run(runtime, ids, ctx = {}) {
 module.exports = {
   REGISTRY, MARK_RE, capsConfig, actionsFile, readActions, countToday, countTodayFor,
   lastActionFor, itemConfig, itemEnabled, itemMaxPerDay, list, promptItems,
-  detect, strip, block, commandAbilities, recentBlock, run, record,
+  detect, strip, block, commandAbilities, recentBlock, run, record, recordActivity,
 };

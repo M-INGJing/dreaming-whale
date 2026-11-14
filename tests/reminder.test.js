@@ -126,6 +126,59 @@ test('成功回执后不再是待发', (t) => {
   assert.equal(svc.nextDueAt(), 0);
 });
 
+test('到点提醒成功后写进「最近做过」，她能感知到（能力闭环第 3 条）', (t) => {
+  const { config } = fixture(t);
+  const clock = { ms: NOW.getTime() };
+  const svc = serviceAt(config, clock);
+  svc.add({ wxid: 'wxid_a', text: '开会', at: clock.ms + 1000 });
+  clock.ms += 2000;
+  const due = svc.due();
+  svc.ack(due[0].id, { ok: true });
+  const recent = require('../src/services/capabilities').recentBlock(config, new Date(clock.ms));
+  assert.match(recent, /到点提醒/);
+  assert.match(recent, /开会/);
+});
+
+/* ---------------- 纪念日 ---------------- */
+
+test('parseAnniversary：「每年3月8日是我生日」这类能解析出月日和标签', () => {
+  const a = reminder.parseAnniversary('每年3月8日是我生日', NOW);
+  assert.ok(a);
+  assert.equal(a.month, 3);
+  assert.equal(a.day, 8);
+  assert.equal(a.what, '生日');
+  assert.equal(reminder.parseAnniversary('5月20号是我们认识的日子', NOW).what, '认识纪念日');
+  assert.equal(reminder.parseAnniversary('下个月8号是我们的纪念日', NOW).what, '纪念日');
+  assert.equal(reminder.parseAnniversary('随便聊聊', NOW), null, '没有关键词不识别');
+  assert.equal(reminder.parseAnniversary('我们认识很久了', NOW), null, '有词但没日期不识别');
+});
+
+test('nextOccurrence：今年没过就在今年，过了就顺延明年', () => {
+  const now = new Date(2026, 2, 10); // 2026-03-10
+  const thisYear = reminder.nextOccurrence(5, 20, now);
+  assert.equal(thisYear.getFullYear(), 2026);
+  assert.equal(thisYear.getMonth(), 4); // 5 月
+  assert.equal(thisYear.getDate(), 20);
+  const passed = reminder.nextOccurrence(1, 1, now); // 1 月 1 日已过
+  assert.equal(passed.getFullYear(), 2027);
+});
+
+test('每年重复的纪念日：到点发完后自动顺延到明年', (t) => {
+  const { config } = fixture(t);
+  const clock = { ms: NOW.getTime() };
+  const svc = serviceAt(config, clock);
+  svc.add({ wxid: 'wxid_a', text: '生日', at: clock.ms + 1000, recur: 'yearly', month: 10, day: 30 });
+  clock.ms += 2000;
+  const due = svc.due();
+  svc.ack(due[0].id, { ok: true });
+  const item = svc.list()[0];
+  assert.equal(item.status, 'pending', '每年重复的提醒不该停在 done');
+  const next = new Date(item.dueAt);
+  assert.equal(next.getFullYear(), NOW.getFullYear() + 1, '顺延到明年');
+  assert.equal(next.getMonth(), 9); // 10 月
+  assert.equal(next.getDate(), 30);
+});
+
 test('重启扫描：过了提醒时间 + 5 分钟的一律标过期，不再补发', (t) => {
   const { config } = fixture(t);
   const clock = { ms: NOW.getTime() };

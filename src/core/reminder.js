@@ -219,6 +219,54 @@ function confirmText({ at, what }, { now = new Date(), group = false, who = '' }
   return `好，${when} 提醒你${what}。${target}。`;
 }
 
+/* ------------------------------ 纪念日 ------------------------------ */
+
+const ANNIVERSARY_RE = /(每年|纪念日|生日|周年|纪念|认识(?:的)?(?:日子|那天)?)/;
+const MONTH_DAY_RE = /(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]/;
+const NEXT_MONTH_DAY_RE = /下个?月\s*(\d{1,2})\s*[日号]/;
+const BARE_DAY_RE = /(?<!\d)(\d{1,2})\s*[日号]/;
+
+/** 把「每年3月8日是我生日」这类话里的「是什么日子」抽成固定短标签 */
+function anniversaryWhat(text) {
+  const s = String(text || '');
+  if (/结婚/.test(s)) return '结婚纪念日';
+  if (/生日/.test(s)) return '生日';
+  if (/周年|认识/.test(s)) return '认识纪念日';
+  return '纪念日';
+}
+
+/**
+ * 解析纪念日声明：必须同时有「纪念日/生日/周年/每年」这类关键词 + 一个「月-日」。
+ * 只认阿拉伯数字的月日；中文数字（三月初八）不在范围内。
+ * @returns {{month:number, day:number, what:string}|null}
+ */
+function parseAnniversary(text, now = new Date()) {
+  const s = String(text || '').trim();
+  if (!s || s.length > 120) return null;
+  if (!ANNIVERSARY_RE.test(s)) return null;
+  let month = null;
+  let day = null;
+  const m1 = s.match(MONTH_DAY_RE);
+  if (m1) { month = Number(m1[1]); day = Number(m1[2]); }
+  else {
+    const m2 = s.match(NEXT_MONTH_DAY_RE);
+    if (m2) { month = (now.getMonth() + 1) % 12 + 1; day = Number(m2[1]); }
+    else {
+      const m3 = s.match(BARE_DAY_RE);
+      if (m3) { month = now.getMonth() + 1; day = Number(m3[1]); }
+    }
+  }
+  if (!month || month < 1 || month > 12 || !day || day < 1 || day > 31) return null;
+  return { month, day, what: anniversaryWhat(s) };
+}
+
+/** 从 now 起（含今天）的下一次「month 月 day 日」9:00。 */
+function nextOccurrence(month, day, now = new Date()) {
+  const thisYear = new Date(now.getFullYear(), month - 1, day, 9, 0, 0);
+  if (thisYear.getTime() >= now.getTime()) return thisYear;
+  return new Date(now.getFullYear() + 1, month - 1, day, 9, 0, 0);
+}
+
 module.exports = {
   parseWhen,
   parseReminder,
@@ -229,4 +277,7 @@ module.exports = {
   cnToNumber,
   parseClockPhrase,
   applyPeriod,
+  parseAnniversary,
+  nextOccurrence,
+  anniversaryWhat,
 };

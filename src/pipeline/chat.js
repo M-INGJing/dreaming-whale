@@ -234,6 +234,37 @@ class Bot {
   }
 
   /**
+   * 纪念日：「每年3月8日是我生日」「5月20号是我们认识的日子」。
+   * 解析出月-日，登记成每年重复的提醒（到点提醒，发完顺延到明年）。
+   */
+  tryAnniversary({ clean, key, msg, atMe, now }) {
+    const service = this.reminders;
+    if (!service) return null;
+    const text = String((clean && clean.text) || '').trim();
+    if (!text || text.length > 120) return null;
+    const parsed = reminderCore.parseAnniversary(text, now);
+    if (!parsed) return null;
+    const next = reminderCore.nextOccurrence(parsed.month, parsed.day, now);
+    try {
+      service.add({
+        wxid: msg.chatId,
+        name: msg.chatTitle || msg.senderName || msg.chatId,
+        chatType: msg.chatType,
+        text: parsed.what,
+        at: next,
+        atName: msg.senderName || '',
+        recur: 'yearly',
+        month: parsed.month,
+        day: parsed.day,
+      });
+    } catch (err) {
+      return { action: 'reply', key, msg, atMe, canned: '这个纪念日没设上：' + ((err && err.message) || err), reason: 'anniversary_error' };
+    }
+    const ymd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+    return { action: 'reply', key, msg, atMe, canned: `好，以后每年 ${parsed.month} 月 ${parsed.day} 日提醒你「${parsed.what}」。最近一次是 ${ymd}。`, reason: 'anniversary_set' };
+  }
+
+  /**
    * 本地事实：农历 / 生肖 / 节气 / 过年中秋的日期与倒计时。
    * 纯计算，不联网、不调模型；不在此范围的原样返回 null。
    */
@@ -663,6 +694,8 @@ class Bot {
     if (hasText && !msg.recycled) {
       const reminderReply = await this.tryReminder({ msg, clean, key, now, nowMs, isGroup, atMe });
       if (reminderReply) return reminderReply;
+      const anniversaryReply = this.tryAnniversary({ clean, key, msg, atMe, now });
+      if (anniversaryReply) return anniversaryReply;
       const lunarReply = this.tryLunar({ clean, key, msg, atMe, now });
       if (lunarReply) return lunarReply;
       const lotteryReply = this.tryLottery({ clean, key, msg, atMe });

@@ -40,6 +40,14 @@ test('commandAbilities：命令/本地事实类也进提示词，让她知道会
   assert.equal(capabilities.commandAbilities({ capabilities: { enabled: false } }), text);
 });
 
+test('recordActivity：非 [[cap]] 的定时/主动调用也进「最近做过」（闭环第 3 条）', () => {
+  const { config } = tmpRuntime();
+  capabilities.recordActivity(config, { id: 'reminder.sent', label: '到点提醒', ok: true, summary: '开会' });
+  const recent = capabilities.recentBlock(config, new Date());
+  assert.match(recent, /到点提醒/);
+  assert.match(recent, /开会/);
+});
+
 test('list/block：列出能力并带 UI 需要的状态；提示词只写能用的', () => {
   const { config } = tmpRuntime();
   const items = capabilities.list(config);

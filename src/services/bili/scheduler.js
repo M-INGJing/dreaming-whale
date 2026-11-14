@@ -357,6 +357,17 @@ function createBiliScheduler(opts = {}) {
       return { ok: true, woke: false, reason: d.reason, weekly };
     }
     const out = await runRound({ dry: false, now });
+    // 定时/主动醒来的这一轮也写进「最近做过」，让她下一轮感知到自己看过（能力闭环第 3 条）
+    if (out.ok && Array.isArray(out.watched) && out.watched.length) {
+      try {
+        const capabilities = require('../../services/capabilities');
+        const chars = out.diary && out.diary.ownerChars ? out.diary.ownerChars : 0;
+        capabilities.recordActivity(config(), {
+          id: 'bili.watch.auto', label: '逛 B 站（自己醒的）', ok: true,
+          summary: '看了 ' + out.watched.length + ' 条视频' + (chars ? '，日记写了 ' + chars + ' 字' : ''),
+        });
+      } catch { /* 记录失败不影响这一轮 */ }
+    }
     return { ok: out.ok, woke: out.ok, reason: out.reason || '', result: out, weekly };
   }
 
