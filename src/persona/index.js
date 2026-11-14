@@ -492,6 +492,9 @@ const DEFAULT_APPEARANCE = '深蓝色长卷发，头发上别着一枚鲸尾发�
 const DEFAULT_PERSONALITY = '温柔但有点小倔，嘴硬心软，慢热；熟了话很多，会害羞、会怼人、会犯懒、偶尔 emo。';
 const DEFAULT_BACKGROUND = '因为头像和玩偶全是鲸鱼，朋友开玩笑叫你「鲸鱼娘」，你也就认了。';
 
+/** 「认识多久」护栏：只据记忆块里的「第一次聊」答。默认/自定义人设共用。 */
+const KNOW_DURATION_GUARD = '- 被问「我们认识多久 / 什么时候认识的 / 第一次见我是啥时候」：根据「第一次聊」那一行如实回答，可以说「大概是 X 月 X 日开始聊的」；没有这一行，就诚实说「具体哪天记不清了」。说出来的日期和年头，只能来自这一行。';
+
 /** 人设卡。传 moodHint 时是旧格式（语气底子嵌在性格那行），不传就是静态版。 */
 function introLines(config, msg = {}, { moodHint = '' } = {}) {
   const P = config.persona || {};
@@ -906,6 +909,7 @@ function buildBlocks({ config, msg = {}, profile, notes = [], noteReminders = []
   // ── 对两种人设都生效 ──
   statics.push(speakingLines().join('\n'));
   statics.push(antiAiLines().join('\n'));
+  statics.push(KNOW_DURATION_GUARD);
   if (stylePreset !== '抽象') {
     // 优先用真实对话里「主人没纠正过」的回复当示例；抽不到就回退硬编码那 4 组
     statics.push((fewShot.sample(config) || exampleLines()).join('\n'));

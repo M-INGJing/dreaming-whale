@@ -30,6 +30,20 @@ test('人设提示词包含场景、群聊礼仪和长度限制', () => {
   assert.ok(sys.length > 200);
 });
 
+test('认识多久的护栏：默认和自定义人设都要有，且只据「第一次聊」答', () => {
+  for (const customPrompt of ['', '你是鲸鲸，保持一点俏皮。']) {
+    const c = { ...config, persona: { ...config.persona, customPrompt } };
+    const sys = assemblePrompt({
+      config: c,
+      msg: { chatType: 'private', senderName: '小海' },
+      now: new Date('2024-05-01T10:00:00'),
+    }).prompt;
+    assert.match(sys, /我们认识多久/, '要有认识多久的护栏');
+    assert.match(sys, /第一次聊/, '要指向记忆块里的「第一次聊」');
+    assert.doesNotMatch(sys, /不要编一个精确日期|别编一个精确日期/, '护栏用行为描述，别写成会被念出来的否定式');
+  }
+});
+
 test('私聊提示词要求短句、不用 Markdown', () => {
   const sys = assemblePrompt({
     config,

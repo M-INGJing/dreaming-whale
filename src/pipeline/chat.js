@@ -23,6 +23,8 @@ const features = require('../infra/features');
 const { matchMaster, isVerifiedOwner } = require('../core/master');
 const links = require('../adapters/links');
 const searchService = require('../services/search');
+const lunar = require('../core/lunar');
+const lottery = require('../core/lottery');
 const biliWatch = require('../services/biliWatch');
 const biliChat = require('../services/bili/chat');
 const capabilities = require('../services/capabilities');
@@ -227,6 +229,66 @@ class Bot {
     } catch (err) {
       return { action: 'reply', key, msg, atMe, canned: '这个提醒没设上：' + ((err && err.message) || err), reason: 'reminder_error' };
     }
+  }
+
+  /**
+   * 本地事实：农历 / 生肖 / 节气 / 过年中秋的日期与倒计时。
+   * 纯计算，不联网、不调模型；不在此范围的原样返回 null。
+   */
+  tryLunar({ clean, key, msg, atMe, now }) {
+    const text = String((clean && clean.text) || '').trim();
+    if (!text || text.length > 60) return null;
+    const d = now instanceof Date ? now : new Date(now);
+
+    // 今天农历 / 阴历 / 初几
+    if (/(今天|现在).{0,4}(农历|阴历|初几)|^(农历|阴历|初几)|(农历|阴历).{0,2}(几号|初几)/.test(text)) {
+      const lu = lunar.solarToLunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      return { action: 'reply', key, msg, atMe, canned: `今天是农历${lu.text}（${lu.zodiac}年）。`, reason: 'lunar_today' };
+    }
+    // 今天节气
+    if (/节气/.test(text)) {
+      const term = lunar.solarTerm(d.getFullYear(), d.getMonth() + 1, d.getDate());
+      return { action: 'reply', key, msg, atMe, canned: term ? `今天是${term}。` : '今天不是节气。', reason: 'lunar_term' };
+    }
+    // 过年 / 春节 / 中秋：日期 + 倒计时（只答明确在问的，不接「我过年回家」这种陈述）
+    const askFestival = /还有几天|几天|哪天|什么时候|啥时候|几号|倒计时|放假/.test(text);
+    if (askFestival) {
+      let festival = null;
+      if (/过年|春节|除夕|大年初一/.test(text)) festival = { name: '春节', next: lunar.nextSpringFestival(d) };
+      else if (/中秋|八月十五/.test(text)) festival = { name: '中秋', next: lunar.nextMidAutumn(d) };
+      if (festival && festival.next) {
+        const today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const next0 = new Date(festival.next.getFullYear(), festival.next.getMonth(), festival.next.getDate());
+        const days = Math.round((next0 - today0) / 86400000);
+        const ymd = `${festival.next.getFullYear()}-${String(festival.next.getMonth() + 1).padStart(2, '0')}-${String(festival.next.getDate()).padStart(2, '0')}`;
+        if (days === 0) return { action: 'reply', key, msg, atMe, canned: `今天就是${festival.name}呀！`, reason: 'lunar_festival' };
+        return { action: 'reply', key, msg, atMe, canned: `${festival.name}是 ${ymd}，还有 ${days} 天。`, reason: 'lunar_festival' };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 娱乐抽签：骰子 / 抽签 / 塔罗。纯本地随机，秒回，不调模型。
+   * 只在被明确要求时回；不在范围返回 null。
+   */
+  tryLottery({ clean, key, msg, atMe }) {
+    const text = String((clean && clean.text) || '').trim();
+    if (!text || text.length > 40) return null;
+    if (/^(骰子|掷骰|掷个骰子|摇骰子|抽签|求签|抽个签|塔罗|占卜|算一卦)[。.!！~～\s]*$/.test(text)
+      || /^(给我)?(掷|摇|扔)个?(骰子)$/.test(text)) {
+      if (/骰/.test(text)) {
+        return { action: 'reply', key, msg, atMe, canned: `🎲 掷出了 ${lottery.rollDice()} 点。`, reason: 'lottery_dice' };
+      }
+      if (/塔罗|占卜/.test(text)) {
+        const t = lottery.drawTarot();
+        const pos = t.isReversed ? '逆位' : '正位';
+        return { action: 'reply', key, msg, atMe, canned: `🃏 ${t.name}（${pos}）：${t.isReversed ? t.reversed : t.upright}。`, reason: 'lottery_tarot' };
+      }
+      const lot = lottery.drawLots();
+      return { action: 'reply', key, msg, atMe, canned: `🎋 ${lot.level}签：${lot.text}${lot.note ? '（' + lot.note + '）' : ''}`, reason: 'lottery_lots' };
+    }
+    return null;
   }
 
   /** 规则解析不出来时，让模型把时间和事情抽成 JSON（模型不可用就放弃，不瞎猜） */
@@ -559,6 +621,10 @@ class Bot {
     if (hasText && !msg.recycled) {
       const reminderReply = await this.tryReminder({ msg, clean, key, now, nowMs, isGroup, atMe });
       if (reminderReply) return reminderReply;
+      const lunarReply = this.tryLunar({ clean, key, msg, atMe, now });
+      if (lunarReply) return lunarReply;
+      const lotteryReply = this.tryLottery({ clean, key, msg, atMe });
+      if (lotteryReply) return lotteryReply;
     }
 
     // 对别人的话仍然旁听存档，但不触发命令、回怼或接话。
@@ -946,6 +1012,7 @@ class Bot {
     const tail = [
       promptParts.tail,
       capabilities.block(this.config),
+      capabilities.commandAbilities(this.config),
       capabilities.recentBlock(this.config, now),
       turnState.bridgeLine,
     ].filter(Boolean).join('\n');

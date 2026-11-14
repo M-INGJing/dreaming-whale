@@ -284,7 +284,23 @@ function block(config) {
   return lines.join('\n');
 }
 
-/** 今天已经做过的，给她一点「记忆」，避免重复做或不知道做没做。 */
+/**
+ * 命令 / 意图 / 本地事实类能力：不用写 [[cap]] 标记，对方开口内核就自动处理。
+ * 列出来让她「知道」自己会（能力闭环第 1 条）；不受 capabilities.enabled 总闸控制，
+ * 因为它们由各自的机制（提醒、农历、抽签、链接阅读）独立工作。
+ */
+const COMMAND_ABILITIES = [
+  { label: '设提醒', hint: '对方说「十点半提醒我开会」，就登记，到点在会话里提醒' },
+  { label: '报农历 / 节气', hint: '对方问「今天初几 / 什么节气 / 离过年还有几天」，直接答' },
+  { label: '抽签 / 骰子 / 塔罗', hint: '对方说「抽个签 / 掷个骰子 / 塔罗」时，陪对方玩一下' },
+  { label: '读链接 / 总结长文', hint: '对方发链接或让你总结，读正文后给要点' },
+];
+
+function commandAbilities() {
+  const lines = ['【对方开口时你会做的（不用写标记，系统会自动处理）】'];
+  for (const a of COMMAND_ABILITIES) lines.push('- ' + a.label + '：' + a.hint);
+  return lines.join('\n');
+}
 function recentBlock(config, now = new Date()) {
   const rows = recentToday(config, now, 3);
   if (!rows.length) return '';
@@ -343,5 +359,5 @@ async function run(runtime, ids, ctx = {}) {
 module.exports = {
   REGISTRY, MARK_RE, capsConfig, actionsFile, readActions, countToday, countTodayFor,
   lastActionFor, itemConfig, itemEnabled, itemMaxPerDay, list, promptItems,
-  detect, strip, block, recentBlock, run, record,
+  detect, strip, block, commandAbilities, recentBlock, run, record,
 };

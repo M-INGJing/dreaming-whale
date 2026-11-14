@@ -396,6 +396,10 @@ class Store {
       card,
       events,
       summary: chat.summary.text,
+      // 认识时间：优先人物卡 firstSeenAt（认识的是「这个人」），缺则会话 createdAt
+      firstSeenAt: card.firstSeenAt,
+      createdAt: chat.createdAt,
+      now: at,
       // 这个块里同时装了「人物卡 + 事件」和「摘要」，所以上限是两者之和；
       // 只给 memory 的话，摘要一长就会把卡的展示空间挤掉。
       budget: plan.memory + plan.summary,

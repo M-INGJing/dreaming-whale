@@ -77,14 +77,14 @@ test('maybeUpdate：只在周日 22 点后跑一次；没有日记/没有模型�
 test('blockFor：有新鲜小结就注入，超过 14 天不注入', () => {
   const { config, root } = tmpConfig();
   biliStore.writeJson(weekly.weeklyPath(config), {
-    weekStart: '2026-11-08', generatedAt: Date.now(), summary: '这周状态还行。', likes: ['猫'], dislikes: ['吵架'], state: '',
+    weekStart: '2026-11-08', generatedAt: sunday.getTime() - 2 * 86400000, summary: '这周状态还行。', likes: ['猫'], dislikes: ['吵架'], state: '',
   });
   const block = weekly.blockFor(config, sunday);
   assert.match(block, /我最近的状态/);
   assert.match(block, /这周状态还行/);
   assert.match(block, /最近更喜欢：猫/);
 
-  biliStore.writeJson(weekly.weeklyPath(config), { weekStart: '2026-10-01', generatedAt: Date.now() - 20 * 86400000, summary: '很旧了' });
+  biliStore.writeJson(weekly.weeklyPath(config), { weekStart: '2026-10-01', generatedAt: sunday.getTime() - 20 * 86400000, summary: '很旧了' });
   assert.equal(weekly.blockFor(config, sunday), '');
   fs.rmSync(root, { recursive: true, force: true });
 });

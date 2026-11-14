@@ -30,6 +30,16 @@ test('detect/strip：识别能力标记并去掉，不留在正文里', () => {
   assert.equal(capabilities.strip('好呀，我去看看 [[cap:bili.watch]]'), '好呀，我去看看');
 });
 
+test('commandAbilities：命令/本地事实类也进提示词，让她知道会做（闭环第 1 条）', () => {
+  const text = capabilities.commandAbilities();
+  assert.match(text, /设提醒/);
+  assert.match(text, /农历/);
+  assert.match(text, /抽签/);
+  assert.match(text, /读链接/);
+  // 不受 capabilities.enabled 总闸影响（这些能力由各自机制独立工作）
+  assert.equal(capabilities.commandAbilities({ capabilities: { enabled: false } }), text);
+});
+
 test('list/block：列出能力并带 UI 需要的状态；提示词只写能用的', () => {
   const { config } = tmpRuntime();
   const items = capabilities.list(config);

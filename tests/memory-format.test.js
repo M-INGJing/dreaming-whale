@@ -16,7 +16,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildMemoryBlock, MEMORY_SCOPE_NOTICE } = require('../src/memory/format');
+const { buildMemoryBlock, MEMORY_SCOPE_NOTICE, agoPhrase, firstSeenLine } = require('../src/memory/format');
 const { estimateBudgetTokens } = require('../src/memory/tokens');
 const personCard = require('../src/memory/personCard');
 
@@ -207,4 +207,41 @@ test('减半只裁人物卡条数：同一张卡小预算下条数变少、内�
   for (const m of tight.matchAll(/偏好第\d+条(?=；|$|\n)/g)) assert.match(m[0], /^偏好第\d+条$/);
   assert.ok(!/[；：]\s*$/.test(tight.split('\n\n（')[0].split('\n').pop()), '最后一行不能停在分隔符上');
   assert.ok(tight.trimEnd().endsWith(MEMORY_SCOPE_NOTICE));
+});
+
+test('第一次聊：有 firstSeenAt 时渲染成一行人话，被问「认识多久」有据可依', () => {
+  const DAY = 86400000;
+  const now = Date.UTC(2026, 10, 14, 12, 0, 0); // 2026-11-14
+  const card = makeCard();
+  card.firstSeenAt = now - 7 * DAY; // 7 天前认识
+  const block = buildMemoryBlock({ card, events: [], summary: '', budget: 900, now });
+  assert.ok(block.includes('第一次聊：2026-11-07'), '要渲染具体日期：' + block);
+  assert.ok(block.includes('约 7 天'), '要有人话时长：' + block);
+  assert.ok(block.indexOf('第一次聊') < block.indexOf('性格'), '第一次聊排在性格前面：' + block);
+});
+
+test('第一次聊：刚认识（今天）也不该让空卡从空串变成有内容', () => {
+  const empty = personCard.newCard({ chatId: CHAT, uid: 'user-test' }); // firstSeenAt = now，但没有 traits/prefs/threads
+  assert.equal(buildMemoryBlock({ card: empty, events: [], summary: '' }), '', '空卡仍是空串，不被 firstSeenAt 顶出来');
+});
+
+test('agoPhrase：今天 / 天 / 月 / 年 分档，无效值返回 null', () => {
+  const DAY = 86400000;
+  const now = Date.UTC(2026, 0, 1);
+  assert.equal(agoPhrase(now - 3600 * 1000, now), '今天');
+  assert.equal(agoPhrase(now - 7 * DAY, now), '约 7 天');
+  assert.equal(agoPhrase(now - 90 * DAY, now), '约 3 个月');
+  assert.equal(agoPhrase(now - 400 * DAY, now), '约 1 年');
+  assert.equal(agoPhrase(0, now), null);
+  assert.equal(agoPhrase(NaN, now), null);
+});
+
+test('firstSeenLine：优先 firstSeenAt，缺则 createdAt，都没有返回 null', () => {
+  const DAY = 86400000;
+  const now = Date.UTC(2026, 5, 1);
+  const line = firstSeenLine(now - 10 * DAY, now - 30 * DAY, now);
+  assert.ok(line.includes('2026-05-22'), '优先用 firstSeenAt：' + line);
+  const fallback = firstSeenLine(0, now - 10 * DAY, now);
+  assert.ok(fallback.includes('2026-05-22'), 'firstSeenAt 缺失时用 createdAt：' + fallback);
+  assert.equal(firstSeenLine(0, 0, now), null, '两个都没有就返回 null，不填 Date.now()');
 });

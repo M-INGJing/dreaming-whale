@@ -52,6 +52,36 @@ function listLine(items) {
   return (items || []).filter(Boolean).join('；');
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+/** 「认识约 7 天 / 约 3 个月 / 约 2 年 / 今天」——给人看的人话，不是裸时间戳 */
+function agoPhrase(ts, now = Date.now()) {
+  const t = Number(ts);
+  if (!t || t <= 0) return null;
+  const diff = Math.max(0, now - t);
+  if (diff < 86400000) return '今天';
+  const days = Math.floor(diff / 86400000);
+  if (days < 31) return `约 ${days} 天`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `约 ${months} 个月`;
+  return `约 ${Math.floor(days / 365)} 年`;
+}
+
+/**
+ * 「第一次聊」这一行：让她被问「认识多久」时有据可依，而不是编。
+ * 优先人物卡的 firstSeenAt（认识的是「这个人」），缺则会话 createdAt（兜底）。
+ * 两个都没有就返回 null —— 宁可没有，也别填 Date.now() 假装今天认识。
+ */
+function firstSeenLine(firstSeenAt, createdAt, now = Date.now()) {
+  const ts = Number(firstSeenAt) || Number(createdAt) || 0;
+  if (!ts) return null;
+  const d = new Date(ts);
+  const ago = agoPhrase(ts, now);
+  return `- 第一次聊：${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}${ago ? `（${ago}）` : ''}`;
+}
+
 /**
  * 按 。！？；和换行切句，切出来的每一段都以边界符结尾（末尾不足一句的残句单独成段）。
  * 不在这里丢任何东西：丢整句的地方在收预算时。
@@ -144,10 +174,11 @@ function pickDroppableEvent(events, maxImportance) {
  *
  * 事件分两层：【相关事件·索引】每条一行常驻；命中的少数事件另起【展开：标题】段。
  */
-function renderBody({ traits, prefs, threads, events, expand = [], summary }) {
+function renderBody({ traits, prefs, threads, firstSeen, events, expand = [], summary }) {
   const sections = [];
   if (traits.length || prefs.length || threads.length) {
     const lines = ['【这个聊天里的 TA】'];
+    if (firstSeen) lines.push(firstSeen);
     if (traits.length) lines.push(`- 性格：${listLine(traits)}`);
     if (prefs.length) lines.push(`- 偏好：${listLine(prefs)}`);
     if (threads.length) lines.push(`- 没聊完：${listLine(threads)}`);
@@ -193,7 +224,8 @@ function hardCut(body, limit, measure) {
  * @returns {string}
  */
 function buildMemoryBlock({
-  card = null, events = [], summary = '', budget = LIMITS.memoryTokens, memoryBudget = null, caps = null,
+  card = null, events = [], summary = '', firstSeenAt = 0, createdAt = 0, now = Date.now(),
+  budget = LIMITS.memoryTokens, memoryBudget = null, caps = null,
 } = {}) {
   const limit = Math.max(0, Number(budget) || LIMITS.memoryTokens);
   const show = {
@@ -203,6 +235,7 @@ function buildMemoryBlock({
     events: Math.max(1, Number(caps && caps.events) || LIMITS.retrievalTopK),
   };
   if (!card) return '';
+  const firstSeen = firstSeenLine(card.firstSeenAt || firstSeenAt, createdAt, now);
   const traits = personCard.activeTraits(card)
     .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
     .map((t) => clip(t.text, 40));
@@ -230,6 +263,7 @@ function buildMemoryBlock({
 
   // 分级的「可丢弃状态」：后面的裁剪只改这里的条数，渲染交给 renderBody
   const state = {
+    firstSeen,
     traits: traits.slice(0, show.traits),
     prefs: prefs.slice(0, show.prefs),
     threads: threads.slice(0, show.threads),
@@ -302,4 +336,4 @@ function buildMemoryBlock({
   return body ? `${body}\n\n${MEMORY_SCOPE_NOTICE}` : MEMORY_SCOPE_NOTICE;
 }
 
-module.exports = { buildMemoryBlock, MEMORY_SCOPE_NOTICE, splitSentences, indexLine };
+module.exports = { buildMemoryBlock, MEMORY_SCOPE_NOTICE, splitSentences, indexLine, agoPhrase, firstSeenLine };
