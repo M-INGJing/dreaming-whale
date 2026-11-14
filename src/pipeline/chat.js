@@ -25,6 +25,7 @@ const links = require('../adapters/links');
 const searchService = require('../services/search');
 const lunar = require('../core/lunar');
 const lottery = require('../core/lottery');
+const todoService = require('../services/todoService');
 const biliWatch = require('../services/biliWatch');
 const biliChat = require('../services/bili/chat');
 const capabilities = require('../services/capabilities');
@@ -287,6 +288,46 @@ class Bot {
       }
       const lot = lottery.drawLots();
       return { action: 'reply', key, msg, atMe, canned: `🎋 ${lot.level}签：${lot.text}${lot.note ? '（' + lot.note + '）' : ''}`, reason: 'lottery_lots' };
+    }
+    return null;
+  }
+
+  /**
+   * 待办清单：无固定时间的备忘。「记一下 X / 待办列表 / 完成待办 N / 删待办 N」。
+   * 纯本地存储，秒回；不在范围返回 null。
+   */
+  tryTodo({ clean, key, msg, atMe }) {
+    const text = String((clean && clean.text) || '').trim();
+    if (!text || text.length > 120) return null;
+    const chatId = msg.chatId;
+
+    if (/^(?:待办列表|我的待办|待办清单|有哪些待办)[。.!！~～\s]*$/.test(text)) {
+      const pending = todoService.pending(this.config, chatId);
+      if (!pending.length) return { action: 'reply', key, msg, atMe, canned: '这会儿没有待办。跟我说「记一下 X」就能加一条。', reason: 'todo_list' };
+      const lines = pending.slice(0, 8).map((it, i) => `${i + 1}. ${it.text}`);
+      return { action: 'reply', key, msg, atMe, canned: '你的待办：\n' + lines.join('\n'), reason: 'todo_list' };
+    }
+
+    const addM = text.match(/^(?:记一下|记个待办|待办记|帮我记一下)\s+(.+)$/);
+    if (addM) {
+      const res = todoService.add(this.config, { chatId, chatType: msg.chatType, text: addM[1] });
+      if (!res.ok) return { action: 'reply', key, msg, atMe, canned: '这条没记上，说清楚点试试？', reason: 'todo_add' };
+      return { action: 'reply', key, msg, atMe, canned: `记下了：${res.item.text}。`, reason: 'todo_add' };
+    }
+
+    const doneM = text.match(/^(?:完成待办|待办完成)\s*(\d+)$/)
+      || text.match(/第\s*(\d+)\s*条\s*(?:待办\s*)?(?:完成|做完了|搞定)[。.!！~～\s]*$/);
+    if (doneM) {
+      const res = todoService.complete(this.config, chatId, Number(doneM[1]));
+      if (!res.ok) return { action: 'reply', key, msg, atMe, canned: '没找到这条待办，先看看「待办列表」吧。', reason: 'todo_done' };
+      return { action: 'reply', key, msg, atMe, canned: `好，这条完成啦：${res.text} ✓`, reason: 'todo_done' };
+    }
+
+    const delM = text.match(/^(?:删待办|删除待办|删掉待办)\s*(\d+)$/);
+    if (delM) {
+      const res = todoService.remove(this.config, chatId, Number(delM[1]));
+      if (!res.ok) return { action: 'reply', key, msg, atMe, canned: '没找到这条待办。', reason: 'todo_del' };
+      return { action: 'reply', key, msg, atMe, canned: `好，划掉了：${res.text}`, reason: 'todo_del' };
     }
     return null;
   }
@@ -625,6 +666,8 @@ class Bot {
       if (lunarReply) return lunarReply;
       const lotteryReply = this.tryLottery({ clean, key, msg, atMe });
       if (lotteryReply) return lotteryReply;
+      const todoReply = this.tryTodo({ clean, key, msg, atMe });
+      if (todoReply) return todoReply;
     }
 
     // 对别人的话仍然旁听存档，但不触发命令、回怼或接话。
