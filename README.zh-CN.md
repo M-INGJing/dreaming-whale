@@ -14,9 +14,8 @@
 >
 > ## 升级怎么不丢记忆（记住这一句就够）
 >
-> **在启动器里点「检查更新」。** 它会下载官方安装包、校验 SHA256、静默覆盖安装：
-> `data\`（聊天记忆 / Key / 称呼）和 `config.json`（主人名单 / token）全程不动，上一版留下的
-> `personas\`、`resources\`、旧位置的 `runtime\vb-cable` 会顺手清掉，不会越装越大。
+> **下载新安装包，直接覆盖安装。** `data\`（聊天记忆 / Key / 称呼）和 `config.json`（主人名单 / token）
+> 全程不动，上一版留下的 `personas\`、`resources\`、旧位置的 `runtime\vb-cable` 会顺手清掉，不会越装越大。
 >
 > 想手动备份也行：`node scripts\memory-tool.js export <文件>` 导出 json，`restore <文件>` 放回去（启动器诊断页「数据维护」也是同一套）。详见下面的「更新到新版本」。
 >
@@ -93,14 +92,10 @@
 
 ## 更新到新版本
 
-### 安装版（setup.exe 装的）
-
-在启动器里点「检查更新」：它会读 `release-manifest.json`、下载官方安装包、**校验 SHA256** 后静默覆盖安装。
+启动器不再自动检查更新。有新版本时，到 GitHub Releases 下载最新的 `whale-girl-x.y.z-setup.exe`，覆盖安装即可：
 
 - 覆盖前会先关掉正在运行的鲸鲸，不卡在「拒绝访问」
 - 沿用原安装目录，`data\`（聊天记忆）和 `config.json`（Key）全程不动
-- 下载允许走系统代理；断网时用本地缓存，从没拉成功过就放行，不挡你启动
-- 强制更新分四档（正常 / 提示 / 强制 / 拦截），由清单远程调参
 
 ## 没有图形入口时怎么办
 
@@ -187,7 +182,6 @@ whale-girl/                        # 与仓库一致，运行数据不入库
 ├─ server.js                       # HTTP + webhook
 ├─ WhaleLauncher.exe               # 唯一图形入口
 ├─ package.json
-├─ release-manifest.json
 ├─ requirements.txt
 ├─ config.example.json
 ├─ README.md

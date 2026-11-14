@@ -207,7 +207,7 @@ jobs:
         run: |
           # 版本号必须从这里注入：csproj 里的 4.0.2 只是本机默认值。
           # 不传的话 CI 出的 exe 文件属性会永远停在 csproj 那个值，
-          # 和安装包 / release-manifest.json 对不上。
+          # 和安装包对不上。
           dotnet publish launcher/WhaleLauncher.csproj `
             -c Release `
             -r win-x64 `
@@ -685,21 +685,8 @@ jobs:
           $setup = (Get-ChildItem artifacts/setup/*.exe | Select-Object -First 1).FullName
           $sums = (Get-ChildItem artifacts/setup/SHA256SUMS.txt).FullName
 
-          # 客户端的四个源里有一个读 Release 资产；不发这份清单，用户装完也永远看不到「有新版本」。
-          # manifest_version 必须递增：多源并存时客户端取序号最大的那一份。
-          $manifestPath = 'artifacts/setup/release-manifest.json'
-          $manifest = Get-Content 'release-manifest.json' -Raw -Encoding utf8 | ConvertFrom-Json
-          $manifest.latest = $env:version
-          $manifest.released_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-          $manifest.manifest_version = [int]$manifest.manifest_version + 1
-          $manifest.message = "鲸鲸 $env:version 已发布：下载安装包覆盖安装即可，data 与 config.json 不受影响。"
-          $releaseNotes = (node scripts/release-notes.js $env:version) -join "`n"
-          if ($LASTEXITCODE -ne 0) { throw '没有找到本版本更新说明，停止发布' }
-          $manifest | Add-Member -NotePropertyName release_notes -NotePropertyValue $releaseNotes -Force
-          $manifest | ConvertTo-Json -Depth 4 | Set-Content -Path $manifestPath -Encoding utf8NoBOM
-          Get-Content $manifestPath
-
-          foreach ($file in @($setup, $sums, $manifestPath)) {
+          # 启动器不再自动检查更新，发版资产只保留安装包和校验值。
+          foreach ($file in @($setup, $sums)) {
             if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Release 资产缺失：$file" }
           }
 
@@ -713,6 +700,5 @@ jobs:
           path: |
             artifacts/setup/*.exe
             artifacts/setup/SHA256SUMS.txt
-            artifacts/setup/release-manifest.json
           if-no-files-found: error
           retention-days: 30

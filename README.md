@@ -16,10 +16,9 @@
 >
 > ## Updating without losing memory
 >
-> **Press "Check for updates" in the launcher.** It downloads the official installer, verifies its SHA256 and
-> silently installs it over the old version: `data\` (chat memory, keys, nicknames) and `config.json`
-> (owner list, token) are left untouched, while leftovers from older versions (`personas\`, `resources\`,
-> the old `runtime\vb-cable` location) are cleaned up so the install does not keep growing.
+> **Download the new installer and install it over the old version.** `data\` (chat memory, keys, nicknames)
+> and `config.json` (owner list, token) are left untouched, while leftovers from older versions (`personas\`,
+> `resources\`, the old `runtime\vb-cable` location) are cleaned up so the install does not keep growing.
 >
 > Prefer a manual backup: `node scripts\memory-tool.js export <file>` writes a JSON export and
 > `restore <file>` puts it back (the launcher's Diagnostics page uses the same commands).
@@ -97,14 +96,10 @@ The only things you must supply: **a logged-in secondary WeChat account** and **
 
 ## Updating to a new version
 
-### Installed edition (setup.exe)
-
-Press **Check for updates** in the launcher: it reads `release-manifest.json`, downloads the official installer, **verifies SHA256** and installs it silently over the old version.
+The launcher no longer checks for updates automatically. To upgrade, download the latest `whale-girl-x.y.z-setup.exe` from GitHub Releases and install it over the old version:
 
 - Running processes are stopped before the overwrite, so it never fails on "access denied".
 - The installation directory is reused; `data\` (chat memory) and `config.json` (keys) are left untouched.
-- Downloads honour the system proxy; offline it falls back to a local cache, and if that never succeeded the update is skipped rather than blocking startup.
-- Forced updates have four levels (normal / notify / force / block), tunable remotely from the manifest.
 
 ## When the launcher won't open
 
@@ -188,7 +183,6 @@ whale-girl/                        # same layout as the repository; runtime data
 ├─ server.js                       # HTTP server + webhooks
 ├─ WhaleLauncher.exe               # the only GUI entry point
 ├─ package.json
-├─ release-manifest.json
 ├─ requirements.txt
 ├─ config.example.json
 ├─ README.md                       # this file (English)

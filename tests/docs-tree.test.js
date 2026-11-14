@@ -6,7 +6,7 @@
  * 只解析 README「## Project structure」一节里的那个代码块，别把别处的代码块当目录树。
  * 三个方向：
  *   1. 树里每个一级路径都必须被 git 跟踪（防手写一个不存在的文件/目录）；
- *   2. 25 个必须出现在树里的跟踪条目，少一个就失败（防漏画新目录）；
+ *   2. 24 个必须出现在树里的跟踪条目，少一个就失败（防漏画新目录）；
  *   3. 不许出现运行期目录与被迁走的旧路径（data/ runtime/ artifacts/ config.json 不入库；
  *      web/ tools/ personas/ resources/ 已经删除或迁走）。
  *
@@ -25,7 +25,7 @@ const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
 const REQUIRED = [
   '.gitattributes', '.gitignore', 'AGENTS.md', 'BUGS.md', 'CHANGELOG.md', 'CONTRIBUTING.md',
   'LICENSE', 'README.md', 'WhaleLauncher.exe', 'config.example.json', 'package.json',
-  'release-manifest.json', 'requirements.txt', 'server.js',
+  'requirements.txt', 'server.js',
   '.github', 'assets', 'bridge', 'docs', 'examples', 'installer', 'launcher', 'scripts',
   'src', 'tests', 'vendor',
 ];
@@ -74,7 +74,7 @@ test('目录树：每个一级路径都在 git 跟踪条目里', () => {
   }
 });
 
-test('目录树：25 个必须出现的跟踪条目一个都不能少', () => {
+test('目录树：24 个必须出现的跟踪条目一个都不能少', () => {
   const names = new Set(firstLevel(treeLines()));
   for (const rel of REQUIRED) {
     assert.ok(names.has(rel), `目录树漏了跟踪条目 ${rel}`);

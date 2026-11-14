@@ -48,12 +48,6 @@
                     <TextBlock Text="鲸鲸" FontSize="15" FontWeight="Bold"
                                Foreground="{DynamicResource Text}" Margin="11,0,0,0" VerticalAlignment="Center" />
 
-                    <Border Background="{DynamicResource Surface3}" CornerRadius="6" Padding="7,3"
-                            Margin="9,0,0,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="VersionText" Text="v4.0-alpha" Foreground="{DynamicResource Muted}"
-                                   FontSize="10" FontWeight="SemiBold" />
-                    </Border>
-
                     <Border Width="1" Height="20" Background="{DynamicResource Line}"
                             Margin="22,0,22,0" VerticalAlignment="Center" />
 
@@ -118,36 +112,6 @@
             </DockPanel>
         </Border>
 
-        <!-- 浮层与主区共用一行，通过 ZIndex 覆盖显示，不参与主区高度分配 -->
-        <Border x:Name="UpdateToast" Grid.Row="1" HorizontalAlignment="Right" VerticalAlignment="Top" Width="860"
-                Margin="24,8,24,8" CornerRadius="10" Padding="14,10" Visibility="Collapsed"
-                Panel.ZIndex="9"
-                BorderThickness="1">
-            <Border.RenderTransform><TranslateTransform x:Name="UpdateToastSlide" /></Border.RenderTransform>
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Background" Value="{DynamicResource AccentSoft}" />
-                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-                </Style>
-            </Border.Style>
-            <StackPanel>
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button Content="立即更新" Style="{StaticResource Primary}" Click="OnToastUpdateClick" />
-                        <Button Content="暂时收起" Style="{StaticResource Ghost}" Margin="8,0,0,0" Click="OnToastDismissClick" />
-                    </StackPanel>
-                    <TextBlock x:Name="UpdateToastText" Text="已检测到新版本" FontSize="13" FontWeight="SemiBold"
-                               VerticalAlignment="Center" Foreground="{DynamicResource AccentText}" />
-                </DockPanel>
-                <Expander Header="更新内容与修复" IsExpanded="True" Margin="0,6,0,0" Foreground="{DynamicResource Text}">
-                    <ScrollViewer MaxHeight="130" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <TextBlock x:Name="UpdateToastNotes" FontSize="12.5" Foreground="{DynamicResource Text2}"
-                                   LineHeight="20" TextWrapping="Wrap" Margin="4,6,4,2" />
-                    </ScrollViewer>
-                </Expander>
-            </StackPanel>
-        </Border>
-
         <!-- 左栏 + 主区 -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
@@ -158,15 +122,6 @@
             <Border Grid.Column="0" Background="{DynamicResource BgNav}"
                     BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
                 <DockPanel Margin="14,16,14,16">
-
-                    <!-- 关于：整个界面的左下角（版本 + 数据目录入口都在这附近，不再占设置一页） -->
-                    <StackPanel DockPanel.Dock="Bottom" Margin="12,10,0,0">
-                        <Border Height="1" Background="{DynamicResource Line}" Margin="0,0,0,10" />
-                        <Button x:Name="BtnUpdate" Content="检查更新" Style="{StaticResource Ghost}"
-                                HorizontalAlignment="Left" Padding="9,3" FontSize="11" Margin="0,0,0,2"
-                                Click="OnCheckUpdate"
-                                ToolTip="从 GitHub Release 查有没有新版；只检查，不会自己改动" />
-                    </StackPanel>
 
                     <ListBox x:Name="Nav" Background="Transparent" BorderThickness="0"
                              ItemContainerStyle="{StaticResource NavItem}"
@@ -212,13 +167,6 @@
                 <!-- 本次运行收到/回复了多少：把「她在干活」这件事放到眼前 -->
                 <TextBlock x:Name="FootStats" DockPanel.Dock="Right" Text=""
                            Style="{StaticResource Small}" VerticalAlignment="Center" Margin="10,0,0,0" />
-                <!-- 更新进度：平时收起，点「现在更新」才出现 -->
-                <TextBlock x:Name="UpdatePct" DockPanel.Dock="Right" Text="" Visibility="Collapsed"
-                           Style="{StaticResource Small}" VerticalAlignment="Center" Margin="10,0,0,0" />
-                <ProgressBar x:Name="UpdateBar" DockPanel.Dock="Right" Width="180" Height="4"
-                             Minimum="0" Maximum="100" IsIndeterminate="True" Visibility="Collapsed"
-                             VerticalAlignment="Center" BorderThickness="0"
-                             Background="{DynamicResource LineSoft}" Foreground="{DynamicResource Accent}" />
             </DockPanel>
         </Border>
     </Grid>

@@ -82,11 +82,6 @@ namespace WhaleLauncher
             var dir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
             _sup = new RuntimeSupervisor(dir);
 
-            // 正式版不该显示成 v4.0-alpha：那会让用户以为自己装的是测试版，
-            // 而且强制更新拿这个版本号做比较，后缀只会添乱。
-            var ver = UpdateManifestService.LocalVersion(dir);
-            VersionText.Text = ver.Length > 0 ? "v" + ver : "v?";
-
             // 分组视图：ListBox 仍是单级选择，组头只做归类，不参与命中与选中，
             // 键盘上下键只会落在真实条目上（所以 GoTo / SelectedIndex 的逻辑不用改）。
             var navView = new ListCollectionView(NavKeys);
@@ -103,17 +98,14 @@ namespace WhaleLauncher
             _timer.Tick += async (_, __) =>
             {
                 await RefreshAsync();
-                await MaybePeriodicUpdateCheckAsync();
             };
             _timer.Start();
 
             Loaded += async (_, __) =>
             {
                 Nav.SelectedIndex = 0;
-                _ = SilentUpdateCheckAsync();
                 await RefreshAsync();
             };
-            Closing += OnClosingDuringUpdate;
             Closed += (_, __) =>
             {
                 Appearance.Changed -= OnAppearanceChanged;
@@ -121,44 +113,6 @@ namespace WhaleLauncher
                 _sup.Dispose();
             };
         }
-
-        // ── 检查更新（左下角按钮 + 右上角小横幅）────────────────
-        private bool _updating;
-        private bool _checkingUpdates;
-        private ManifestCheck _lastManifest;
-        private DateTime _lastManifestCheck = DateTime.MinValue;
-
-        // 挂后台不关的用户也要能看到新版：每 6 小时静默查一次（只提示，不拦人）。
-        private const int PeriodicCheckHours = 6;
-
-        private void ShowToast(string text)
-        {
-            var opening = UpdateToast.Visibility != Visibility.Visible;
-            UpdateToastText.Text = text ?? "已检测到新版本";
-            UpdateToastNotes.Text = UpdateManifestService.ReleaseSummary(_lastManifest?.Manifest);
-            UpdateToast.Visibility = Visibility.Visible;
-            if (opening)
-            {
-                UpdateToastSlide.BeginAnimation(TranslateTransform.YProperty,
-                    new DoubleAnimation(-32, 0, TimeSpan.FromMilliseconds(220))
-                    { EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut } });
-                UpdateToast.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)));
-            }
-        }
-
-        private void HideToast()
-        {
-            UpdateToast.Visibility = Visibility.Collapsed;
-        }
-
-        private void OnToastUpdateClick(object sender, RoutedEventArgs e)
-        {
-            if (_lastManifest != null && _lastManifest.HasUpdate) _ = RunUpdateAsync(_lastManifest, askFirst: true);
-            else OnCheckUpdate(sender, null);
-            e.Handled = true;
-        }
-
-        private void OnToastDismissClick(object sender, RoutedEventArgs e) => HideToast();
 
         /// <summary>
         /// 内核启动时如果自动迁移了 3.x 旧记忆，弹一次「已导入并转换格式」。
@@ -201,293 +155,6 @@ namespace WhaleLauncher
             if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty(name, out var v)
                 && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n)) return n;
             return 0;
-        }
-
-        private void SetUpdateButton(bool hasUpdate)
-        {
-            BtnUpdate.Content = hasUpdate ? "有新版本" : "检查更新";
-        }
-
-        private async void OnCheckUpdate(object sender, RoutedEventArgs e)
-        {
-            if (_updating || _checkingUpdates) return;
-            _checkingUpdates = true;
-            BtnUpdate.IsEnabled = false;
-            StatusLine.Text = "正在检查更新…";
-            try
-            {
-                var chk = await UpdateManifestService.FetchAsync(_sup.BaseDir);
-                _lastManifestCheck = DateTime.Now;
-                ApplyManifestPolicy(chk, true);
-            }
-            finally
-            {
-                BtnUpdate.IsEnabled = true;
-                _checkingUpdates = false;
-            }
-        }
-
-        /// <summary>
-        /// 拿清单结果决定界面形态。这里只做「提示 / 强制 / 禁止启动」的判定，
-        /// 不下载；真下载交给 UpdateService（安装版下安装包，源码版跑 update.ps1）。
-        /// </summary>
-        private async Task SilentUpdateCheckAsync()
-        {
-            if (_updating || _checkingUpdates) return;
-            _checkingUpdates = true;
-            _lastManifestCheck = DateTime.Now;
-            try
-            {
-                var chk = await UpdateManifestService.FetchAsync(_sup.BaseDir);
-                ApplyManifestPolicy(chk, false, allowBlocking: false);
-            }
-            finally { _checkingUpdates = false; }
-        }
-
-        /// <summary>
-        /// 挂后台一直不关的用户，也需要知道有新版。
-        /// 运行中只更新提示和按钮，不弹强制窗——人正在用，突然盖遮罩太粗暴；
-        /// 强制 / 熔断仍然只在「启动」那一刻判定，下次重启才真的拦。
-        /// </summary>
-        private async Task MaybePeriodicUpdateCheckAsync()
-        {
-            if (_updating) return;
-            if ((DateTime.Now - _lastManifestCheck).TotalHours < PeriodicCheckHours) return;
-            await SilentUpdateCheckAsync();
-        }
-
-        private void ApplyManifestPolicy(ManifestCheck chk, bool interactive, bool allowBlocking = true)
-        {
-            switch (chk.Policy)
-            {
-                case UpdatePolicy.Kill:
-                    if (!allowBlocking)
-                    {
-                        // 定时检查不拦人：只在状态行说明，下次启动才真的停用
-                        _lastManifest = chk;
-                        SetUpdateButton(chk.HasUpdate);
-                        ShowToast("当前版本已停用，请更新到 v" + chk.Manifest.Latest);
-                        StatusLine.Text = "当前版本已被停用，下次启动需要更新";
-                        return;
-                    }
-                    _lastManifest = null;
-                    SetUpdateButton(false);
-                    ShowKilled(chk);
-                    return;
-
-                case UpdatePolicy.Force:
-                    if (!allowBlocking)
-                    {
-                        // 运行中不打断，退化成提示
-                        _lastManifest = chk;
-                        SetUpdateButton(true);
-                        ShowToast("必须更新到 v" + chk.Manifest.Latest);
-                        StatusLine.Text = "当前版本需要更新到 v" + chk.Manifest.Latest + "（下次启动生效）";
-                        return;
-                    }
-                    _lastManifest = chk;
-                    SetUpdateButton(true);
-                    ShowToast("必须更新到 v" + chk.Manifest.Latest);
-                    StatusLine.Text = "当前 v" + chk.Current + " 已停止支持，需要更新到 v" + chk.Manifest.Latest;
-                    _ = RunUpdateAsync(chk, askFirst: false);   // 强制态不给「以后再说」
-                    return;
-
-                case UpdatePolicy.Warn:
-                    _lastManifest = chk;
-                    SetUpdateButton(true);
-                    ShowToast("已检测到新版本 v" + chk.Manifest.Latest);
-                    StatusLine.Text = chk.FromCache
-                        ? "发现新版本 v" + chk.Manifest.Latest + "（" + chk.Error + "）"
-                        : "发现新版本 v" + chk.Manifest.Latest + "（当前 v" + chk.Current + "）";
-                    if (interactive) _ = RunUpdateAsync(chk, askFirst: true);
-                    return;
-
-                default:
-                    _lastManifest = null;
-                    HideToast();
-                    SetUpdateButton(false);
-                    StatusLine.Text = chk.Error.Length > 0
-                        ? "检查更新失败：" + chk.Error + "（不影响使用）"
-                        : "已是最新 v" + (chk.Current.Length > 0 ? chk.Current : "?");
-                    return;
-            }
-        }
-
-        /// <summary>被熔断：说明原因后退出，不创建主界面。宁可停掉，也别让人用会写坏数据的版本。</summary>
-        private void ShowKilled(ManifestCheck chk)
-        {
-            var msg = "当前版本 v" + chk.Current + " 已被停用。\n\n"
-                + (chk.Manifest != null && chk.Manifest.Message.Length > 0
-                    ? chk.Manifest.Message
-                    : "这个版本存在已知的严重问题，请下载最新版。")
-                + "\n\n请到 GitHub Releases 下载最新安装包。";
-            MessageBox.Show(msg, "版本已停用", MessageBoxButton.OK, MessageBoxImage.Stop);
-            Application.Current.Shutdown();
-        }
-
-        /// <summary>
-        /// 真正下载并换版：源码版跑 update.ps1（备份 / 覆盖 / 失败回滚），安装版下载官方安装包、
-        /// 校验 SHA256 后静默覆盖安装。askFirst=false 用于强制态：不再问「现在更新吗」。
-        /// </summary>
-        private async Task RunUpdateAsync(ManifestCheck chk, bool askFirst)
-        {
-            if (_updating || chk == null || chk.Manifest == null) return;
-            var latest = chk.Manifest.Latest;
-            // 有脚本 = 源码版 / 老 zip 装法；安装版包里没有 scripts\，走安装包
-            var byScript = File.Exists(Path.Combine(_sup.BaseDir, "scripts", "update.ps1"));
-
-            if (askFirst)
-            {
-                var how = byScript
-                    ? "更新会先备份，再覆盖代码；data\\ 和 config.json 不会被改动。\n"
-                    : "更新会下载官方安装包，校验 SHA256 后覆盖安装；data\\ 和 config.json 不会被改动。\n";
-                var answer = MessageBox.Show(
-                    "发现新版本 v" + latest + "（当前 v" + chk.Current + "）。\n\n"
-                    + (chk.Manifest.Message.Length > 0 ? chk.Manifest.Message + "\n\n" : "")
-                    + how
-                    + "更新期间启动器会退出，结束后自动重新打开。\n\n现在更新吗？",
-                    "检查更新", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (answer != MessageBoxResult.Yes) return;
-            }
-
-            _updating = true;
-            BtnUpdate.IsEnabled = false;
-            ShowUpdateProgress("正在更新…", -1);
-            try
-            {
-                // 进度每来一条就回传一次（Progress<T> 会切回 UI 线程）
-                var prog = new Progress<UpdateService.Progress>((p) => ShowUpdateProgress(p.Text, p.Percent));
-                var outcome = await UpdateService.ApplyAsync(_sup.BaseDir, latest, prog);
-                if (!outcome.Ok)
-                {
-                    HideUpdateProgress();
-                    StatusLine.Text = "更新失败：" + outcome.Error;
-                    // 强制态不能「失败也照常用」：提示完退出，下次启动还会再拦
-                    if (!askFirst)
-                    {
-                        MessageBox.Show(
-                            "必须更新到 v" + latest + " 才能继续使用，但自动更新失败了：\n\n" + outcome.Error,
-                            "必须更新", MessageBoxButton.OK, MessageBoxImage.Stop);
-                        Application.Current.Shutdown();
-                        return;
-                    }
-                    MessageBox.Show("更新失败：" + outcome.Error + "\n\n再点一次「检查更新」可以重试。",
-                        "检查更新", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                // 安装版：apply.ps1 已经接手——等本进程退出后装包，装完自己拉起新版。
-                // 这里不能再 RestartSelf，否则会跟安装器抢同一个 exe。
-                if (outcome.HandedToInstaller)
-                {
-                    StatusLine.Text = "正在安装 v" + latest + "，启动器会退出并在安装完成后自动重新打开…";
-                    await Task.Delay(800);
-                    Application.Current.Shutdown();
-                    return;
-                }
-
-                // 源码版：跑着的还是旧镜像，旧 exe 也只有等本进程退出才删得掉。
-                StatusLine.Text = "已更新到 v" + latest + "，正在重启…";
-                await Task.Delay(800);
-
-                // 脚本收尾时会自己把启动器拉起来（带 --replace 本进程 PID）：
-                // 它已经在了就只关自己；没在（老脚本）才自己起一个。
-                if (AnotherInstanceRunning())
-                {
-                    Application.Current.Shutdown();
-                }
-                else if (!RestartSelf(out var restartErr))
-                {
-                    HideUpdateProgress();
-                    StatusLine.Text = "已更新到 v" + latest + "，请手动重新打开";
-                    MessageBox.Show(
-                        "更新完成，但自动重启失败：" + restartErr + "\n\n请手动关掉再打开启动器（新版要重启才生效）。",
-                        "检查更新", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-            finally
-            {
-                _updating = false;
-                BtnUpdate.IsEnabled = true;
-            }
-        }
-
-        /// <summary>进度条 + 一句话。Percent &lt; 0 时走不确定态（解压/备份这种没有百分比的步骤）。</summary>
-        private void ShowUpdateProgress(string text, double percent)
-        {
-            if (!string.IsNullOrEmpty(text)) StatusLine.Text = text;
-            UpdateBar.Visibility = Visibility.Visible;
-            if (percent < 0)
-            {
-                UpdateBar.IsIndeterminate = true;
-                UpdatePct.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                UpdateBar.IsIndeterminate = false;
-                UpdateBar.Value = Math.Max(0, Math.Min(100, percent));
-                UpdatePct.Text = (int)percent + "%";
-                UpdatePct.Visibility = Visibility.Visible;
-            }
-        }
-
-        private void HideUpdateProgress()
-        {
-            UpdateBar.Visibility = Visibility.Collapsed;
-            UpdatePct.Visibility = Visibility.Collapsed;
-        }
-
-        /// <summary>是不是已经有新实例被脚本拉起来了（含自己）。</summary>
-        private static bool AnotherInstanceRunning()
-        {
-            try
-            {
-                var name = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? "");
-                if (string.IsNullOrEmpty(name)) return false;
-                return Process.GetProcessesByName(name).Length > 1;
-            }
-            catch { return false; }
-        }
-
-        /// <summary>更新中关窗口：说清楚关掉也不会中断，让用户自己决定。</summary>
-        private void OnClosingDuringUpdate(object sender, System.ComponentModel.CancelEventArgs e)
-        {
-            if (!_updating) return;
-            var ans = MessageBox.Show(
-                "更新还在进行。\n\n" +
-                "关掉窗口不会中断更新：下载和安装会在后台继续，装完会自动把启动器重新打开。\n\n现在关吗？",
-                "更新进行中", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (ans != MessageBoxResult.Yes) e.Cancel = true;
-        }
-
-        /// <summary>
-        /// 重启自己：起一个新实例（带 --replace 本进程 PID），然后关掉本进程。
-        /// 返回 false 表示起不来，调用方负责提示。
-        /// </summary>
-        private bool RestartSelf(out string error)
-        {
-            error = "";
-            try
-            {
-                // 不写死文件名：更新可能刚把 exe 换掉（甚至以后会改名），
-                // ProcessPath 永远是"我是从哪个路径启动的"，正好就是要重启的那个。
-                var exe = Environment.ProcessPath;
-                if (string.IsNullOrEmpty(exe)) exe = Path.Combine(AppContext.BaseDirectory, "WhaleLauncher.exe");
-                Process.Start(new ProcessStartInfo(exe)
-                {
-                    UseShellExecute = true,
-                    WorkingDirectory = AppContext.BaseDirectory,
-                    // 让新进程等本进程退出再抢单实例锁，否则会弹「已经在运行」
-                    Arguments = "--replace " + Environment.ProcessId,
-                });
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-                return false;
-            }
-            Application.Current.Shutdown();
-            return true;
         }
 
         // ── 彩蛋 ────────────────────────────────────────────────
@@ -754,9 +421,12 @@ namespace WhaleLauncher
                 IconNight.Visibility = Appearance.IsDark && (hour >= 23 || hour < 5)
                     ? Visibility.Visible : Visibility.Collapsed;
 
-                // 更新期间这行归更新流程管，别被两秒一次的刷新覆盖掉；彩蛋台词优先 3 秒
-                if (_easterUntil > DateTime.Now) StatusLine.Text = _easterLine;
-                else if (!_updating)
+                // 彩蛋台词优先 3 秒，其余时候显示「她在不在」这句结论
+                if (_easterUntil > DateTime.Now)
+                {
+                    StatusLine.Text = _easterLine;
+                }
+                else
                 {
                     // 都正常的时候别只写「就绪」：她到底在不在，是这行唯一有用的信息
                     var idle = AnythingRunning ? "她在后台陪着" : "她在等你按启动";
