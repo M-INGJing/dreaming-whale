@@ -1,7 +1,38 @@
 # -*- coding: utf-8 -*-
 """Bridge runtime mixin: WindowMixin."""
 import engine as G
-from window_state import needs_restore, restore_calls
+from window_state import describe_window, needs_restore, restore_calls
+
+
+def session_disconnected():
+    """当前进程所在会话是不是「已断开连接」（RDP 断开后为 True）。
+
+    RDP 一断，Windows 会把这个会话的窗口全标成最小化、并且不再有前台窗口；
+    用窗口状态判断只能看到「已最小化」，会把排查带到错误方向（见 window_state.describe_window）。
+    这里问 RDS 要会话连接状态：0=Active，4=Disconnected。
+    拿不到状态时一律当「没断连」，保持旧行为。
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        pid = ctypes.windll.kernel32.GetCurrentProcessId()
+        sid = wintypes.DWORD(0)
+        if not ctypes.windll.kernel32.ProcessIdToSessionId(pid, ctypes.byref(sid)):
+            return False
+        buf = ctypes.c_void_p()
+        size = wintypes.DWORD(0)
+        ok = ctypes.windll.wtsapi32.WTSQuerySessionInformationW(
+            None, sid.value, 8, ctypes.byref(buf), ctypes.byref(size))
+        if not ok or not buf.value:
+            return False
+        try:
+            return ctypes.cast(buf, ctypes.POINTER(ctypes.c_int))[0] == 4
+        finally:
+            ctypes.windll.wtsapi32.WTSFreeMemory(buf)
+    except Exception:
+        return False
+
 
 
 class WindowMixin:
@@ -149,11 +180,11 @@ class WindowMixin:
             h = int(self.ACCOUNT.get('hwnd') or 0) or int(w)
             if not win32gui.IsWindow(h):
                 return '主窗句柄失效（微信可能自更新/重启过）'
-            if win32gui.IsIconic(h):
-                return '已最小化'
-            if not win32gui.IsWindowVisible(h):
-                return '在托盘（窗口隐藏）'
-            return '可见'
+            return describe_window(
+                bool(win32gui.IsIconic(h)),
+                bool(win32gui.IsWindowVisible(h)),
+                session_disconnected(),
+            )
         except Exception as e:
             return '读不到窗口状态（%s）' % type(e).__name__
 
@@ -251,13 +282,15 @@ class WindowMixin:
           3. 不管成功失败，**发完都把窗口状态还原**（该最小化的重新最小化、前台还给原来的窗口），
              这样你在用电脑时最多看到它闪一下。
         把 wechat.backgroundSend 设成 false 就退回以前的「每次先抢前台、发完不管」。
+
+        注意：这里**不再因为表情包功能开着就强制前台**。表情包有自己的一条路
+        （sticker_mixin.send_sticker 负责抢前台 + 粘贴），文字回复没理由陪它一起抢；
+        之前把两者绑在 G.STICKER_TEST_ON 上，导致「开了表情包 → 所有文字也必须前台」，
+        在 RDP 断连（没有前台）时连普通文字都发不出去。
         """
-        force_front = G.STICKER_TEST_ON
         restore_after = G.BACKGROUND_SEND
         snap = self.snapshot_win_state() if restore_after else None
         try:
-            if force_front:
-                return self.force_send_foreground(fn, require_foreground=True)
             if restore_after:
                 try:
                     if fn():

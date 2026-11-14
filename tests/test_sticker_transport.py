@@ -533,7 +533,13 @@ def _referenced_names(definitions):
 
 
 class BridgeContractTest(unittest.TestCase):
-    def test_sticker_switch_forces_foreground_even_with_background_configured(self):
+    def test_sticker_switch_no_longer_forces_foreground_for_text(self):
+        """表情包开关不能再把「文字发送」推向前台。
+
+        旧契约是「开了表情包 → with_window_on_top 直接 require_foreground=True」，
+        RDP 断连（会话没有前台）时连普通文字都发不出去。现在文字永远先走后台，
+        只有后台失败才降级到前台（且不强制要求前台）。
+        """
         action = Mock(return_value=True)
         foreground = Mock(return_value=False)
         restore = Mock()
@@ -542,15 +548,21 @@ class BridgeContractTest(unittest.TestCase):
             'force_send_foreground': foreground,
             'snapshot_win_state': lambda: 'snapshot', 'restore_win_state': restore,
         })
-        self.assertFalse(scope['with_window_on_top'](action))
-        action.assert_not_called()
-        foreground.assert_called_once_with(action, require_foreground=True)
-        restore.assert_called_once_with('snapshot')
-        scope['STICKER_TEST_ON'] = False
-        foreground.reset_mock()
         self.assertTrue(scope['with_window_on_top'](action))
         action.assert_called_once()
         foreground.assert_not_called()
+        restore.assert_called_once_with('snapshot')
+
+    def test_background_failure_falls_back_to_foreground_without_requiring_it(self):
+        action = Mock(return_value=False)
+        foreground = Mock(return_value=True)
+        scope = bridge_functions({'with_window_on_top'}, {
+            'STICKER_TEST_ON': True, 'BACKGROUND_SEND': True,
+            'force_send_foreground': foreground,
+            'snapshot_win_state': lambda: 'snapshot', 'restore_win_state': Mock(),
+        })
+        self.assertTrue(scope['with_window_on_top'](action))
+        foreground.assert_called_once_with(action)
 
     def setUp(self):
         self.cfg = {'features': {'stickers': True}, 'wechat': {}}

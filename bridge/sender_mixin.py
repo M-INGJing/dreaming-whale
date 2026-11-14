@@ -92,7 +92,7 @@ class SenderMixin:
             u = self.UIA_CACHE['u']
         if u is None:
             return False
-        if G.BACKGROUND_SEND and (not G.STICKER_TEST_ON):
+        if G.BACKGROUND_SEND:
             self.install_quiet_uia(u)
         keys = self.aliases_for(username, who) if username else [who]
         try:
@@ -382,7 +382,9 @@ class SenderMixin:
                 return False
             t_start = G.time.time()
             allow_mark_dead = True
-            if not G.STICKER_TEST_ON and G.BG_SEND.get('enabled', True):
+            # 零焦点通道永远先试：它不抢前台，RDP 断连（没有前台）时也能发。
+            # 以前这里被 G.STICKER_TEST_ON 挡住，等同「开了表情包就连文字都不能后台发」。
+            if G.BG_SEND.get('enabled', True):
                 G.SEND_STATE['start'] = G.time.time()
                 try:
                     if self.bg_send(text, chat_display_name, chat_username):

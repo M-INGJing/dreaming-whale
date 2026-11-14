@@ -21,3 +21,21 @@ def restore_calls(iconic, visible):
     if iconic:
         calls.append(SW_RESTORE)
     return calls
+
+
+def describe_window(iconic, visible, disconnected=False):
+    """把窗口现场翻译成心跳里给人看的一句话。
+
+    为什么要单独判「会话断连」：RDP 断开后 Windows 会把该会话的窗口统一标成
+    最小化（坐标挪到 -32000），但用户并没有点最小化。以前这里只报「已最小化」，
+    排查时会被带到「把微信窗口打开」这种错误方向上去——真正的原因是整台会话
+    没有前台，只有 tscon 回 console 才能恢复。
+    """
+    if disconnected:
+        return '已断连（RDP，会话无前台）'
+    if iconic:
+        return '已最小化'
+    if not visible:
+        return '在托盘（窗口隐藏）'
+    return '可见'
+
