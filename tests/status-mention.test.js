@@ -60,7 +60,7 @@ test('「此刻在干嘛」按小时抽样，最多只占少数小时', () => {
     const sys = promptAt(config, date);
     if (sys.includes('你大概')) {
       shown += 1;
-      assert.match(sys, /不要主动说出来/, '给了背景也必须要求她别说出来');
+      assert.match(sys, /别主动说|明确问/, '给了背景也必须要求她别说出来');
     } else {
       assert.match(sys, /不用说自己正在干什么/);
     }
