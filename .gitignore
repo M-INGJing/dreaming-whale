@@ -65,3 +65,10 @@ runtime/
 
 # AI 协作者的本地记忆目录（只在本机）：不含密钥，但带本机路径，不入库
 .workbuddy/
+
+# 本地数据备份包：含 API Key / B 站 cookie / 聊天记录，绝不入库
+# 覆盖三种情况：zip 本体、解压出的整个目录、把内容直接摊到根目录时的两份说明
+/whale-girl-backup-*.zip
+/whale-girl-backup-*/
+/RESTORE.md
+/MANIFEST.txt
