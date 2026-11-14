@@ -25,6 +25,7 @@ const links = require('../adapters/links');
 const searchService = require('../services/search');
 const lunar = require('../core/lunar');
 const lottery = require('../core/lottery');
+const summarize = require('../core/summarize');
 const todoService = require('../services/todoService');
 const biliWatch = require('../services/biliWatch');
 const biliChat = require('../services/bili/chat');
@@ -884,7 +885,9 @@ class Bot {
       } catch (err) { this.logger?.warn('[search] stage=record_failed ' + describeError(err)); }
     }
     const linkText = await linkTask;
-    msg.linkText = linkText;
+    // 长正文按预算整句截断，标记已截断，避免几万字顶爆提示词、或让她假装读完
+    const linkFitted = summarize.trimToBudget(linkText, { maxChars: 1200 });
+    msg.linkText = linkFitted.truncated ? linkFitted.text + '\n（正文较长，已截断；只据以上片段回应，别假装读完了全文。）' : linkFitted.text;
     msg.webText = searchResult.text;
     msg.webSearchStatus = searchResult.status === 'skipped' ? '' : searchResult.status;
     msg.webSearchReason = searchResult.reason;
