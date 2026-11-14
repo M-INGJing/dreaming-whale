@@ -2,8 +2,16 @@
 
 const care = require('./care');
 
+// 演示模式 / 模型失败时用兜底台词；记住上一次，避免连着说同一句。
+let lastTemplate = '';
+function nextTemplate() {
+  const picked = care.pickTemplate(undefined, lastTemplate);
+  lastTemplate = picked;
+  return picked;
+}
+
 /**
- * 主动搭话的内容：问她一句「在干啥 / 累不累」。
+ * 主动搭话的内容：她自己来找你聊一句自然的关心话。
  * 演示模式（没 Key）直接用内置台词，省得等模型；有 Key 就带着最近聊天生成，避免每次同一句。
  */
 async function careForChat(runtime, chatId) {
@@ -28,16 +36,16 @@ async function careForChat(runtime, chatId) {
     }
   }
   if (runtime.llm.isMock) {
-    return { ok: true, text: care.pickTemplate(), mock: true, hour };
+    return { ok: true, text: nextTemplate(), mock: true, hour };
   }
   try {
     const { system, user } = care.buildCarePrompt({ persona: personaCfg, recent, name, hour });
     const raw = await runtime.llm.complete({ system, turns: [{ role: 'user', content: user }] });
-    const text = care.cleanCareText(raw) || care.pickTemplate();
+    const text = care.cleanCareText(raw) || nextTemplate();
     return { ok: true, text, mock: false, hour };
   } catch (err) {
     runtime.logger.warn('搭话模型失败，用内置台词：' + (err && err.message));
-    return { ok: true, text: care.pickTemplate(), mock: true, fallback: true, hour };
+    return { ok: true, text: nextTemplate(), mock: true, fallback: true, hour };
   }
 }
 

@@ -292,7 +292,7 @@ const DEFAULT_CONFIG = {
     timeoutMs: 90000,
     maxSeconds: 120,
   },
-  // 主动搭话（没事时她自己来问一句「在干啥 / 累不累」）
+  // 主动搭话（没事时她自己来一句自然的关心）
   care: {
     // 默认：她自己来找你（只找主人），但绝不进群、也不主动找别人
     enabled: true,

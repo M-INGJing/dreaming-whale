@@ -182,6 +182,16 @@ test('深夜心情自动变困', () => {
   assert.ok(persona.MOODS.some((m) => m.name === noon.name));
 });
 
+test('深夜不再主动催睡，只在对方说困了才顺着关心', () => {
+  const sys = assemblePrompt({
+    config,
+    msg: { chatType: 'private', senderName: '小海' },
+    now: new Date('2024-05-01T23:30:00'),
+  }).prompt;
+  assert.match(sys, /对方主动说困了或要睡了/);
+  assert.doesNotMatch(sys, /可以催对方睡/);
+});
+
 test('能识别 @ 和名字，并清洗掉提及', () => {
   assert.deepEqual(persona.cleanIncomingForPersona('@鲸鲸 在吗', config), { text: '在吗', atMe: true, hadAlias: true });
   assert.equal(persona.cleanIncomingForPersona('鲸娘，今天好累', config).atMe, true);

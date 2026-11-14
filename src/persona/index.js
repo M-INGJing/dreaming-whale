@@ -990,7 +990,7 @@ function buildBlocks({ config, msg = {}, profile, notes = [], noteReminders = []
   if (activityRoll < 0.22) {
     dynamic.push(`- 此刻：你大概${activity}——只是背景，**不要主动说出来**，也别拿它开场；对方问到「你在干嘛」再提。`);
   }
-  if (isLateNight(now)) dynamic.push('- 这个点你有点困了，回复更短更软，可以催对方睡，但别唠叨。');
+  if (isLateNight(now)) dynamic.push('- 这个点你有点困了，回复更短更软；对方主动说困了或要睡了，再顺着关心一下，别主动反复催睡。');
   // 节奏提示放最后：只在这一轮真的该提醒时才出现；它是尾部内容，不会打碎 system 前缀缓存
   if (msg.stickerDemand && stickerBlock) {
     dynamic.push('- 【表情包】这条带一张，从可用分类里挑最贴的，末尾写 [[sticker:分类名]]。');
@@ -1183,7 +1183,7 @@ function buildLegacySystem({ config, msg, profile, notes = [], noteReminders = [
   }
   lines.push(...presenceStaticLines());
   if (isLateNight(now)) {
-    lines.push('这个点你有点困了，回复更短更软，可以催对方睡，但别唠叨。');
+    lines.push('这个点你有点困了，回复更短更软；对方主动说困了或要睡了，再顺着关心一下，别主动反复催睡。');
   }
   lines.push('');
   lines.push(...answerLines());

@@ -4,7 +4,7 @@
 const { toBool } = require('../infra/features');
 
 /**
- * 主动搭话（care）：没事的时候她自己来找你说句话，问问「在干啥 / 累不累」。
+ * 主动搭话（care）：没事的时候她自己来找你说句话，来句自然的关心。
  *
  * 桥接定时问服务端「该不该发」，服务端说该发就生成内容。
  * 区别是这里由调试台控制**时间窗**和**频率**，而且用纯函数算，方便测试。
@@ -184,18 +184,21 @@ function careDue(config, { lastSentTs = 0, sentToday = 0, now = Date.now() } = {
 /** 演示模式 / 模型挂了时候的兜底台词（她主动开口的那几种） */
 const CARE_TEMPLATES = [
   '在干啥呢',
-  '忙完了没，累不累',
-  '今天累不累啊',
+  '吃了吗，今天过得怎么样',
   '在忙吗，我就问一句',
   '干嘛呢，有没有好好吃饭',
   '闲下来没，陪我说句话',
-  '在干活吗，别太累了',
-  '你这会儿在忙啥',
+  '今天过得开心不',
+  '这会儿在忙啥呢',
+  '有没有什么想跟我说的',
 ];
 
-function pickTemplate(rng = Math.random) {
-  const i = Math.floor(rng() * CARE_TEMPLATES.length);
-  return CARE_TEMPLATES[Math.min(CARE_TEMPLATES.length - 1, Math.max(0, i))];
+function pickTemplate(rng = Math.random, avoid = '') {
+  const banned = String(avoid || '').trim();
+  const pool = banned ? CARE_TEMPLATES.filter((t) => t !== banned) : CARE_TEMPLATES;
+  const src = pool.length ? pool : CARE_TEMPLATES;
+  const i = Math.floor(rng() * src.length);
+  return src[Math.min(src.length - 1, Math.max(0, i))];
 }
 
 /**
@@ -208,11 +211,11 @@ function buildCarePrompt({ persona = {}, recent = [], name = '', hour = null } =
   const lines = [
     `你叫${who}，现在是你自己主动找人说话（对方没先开口）。`,
     `对方叫「${name || master}」。`,
-    '目的很简单：关心一下对方在干嘛、累不累。',
+    '目的很简单：自然地问候一下，关心对方此刻的状态。',
     '',
     '要求：',
     '- 一句话，8~20 个字，像真人随手发的一条微信。',
-    '- 可以是「在干啥呢」「忙完了没，累不累」这种感觉，但不要每次都说同一句。',
+    '- 可以是「在干啥呢」「吃了吗」「今天过得怎么样」这种感觉，但不要每次都说同一句，也别总问累不累。',
     '- 可以顺着最近聊的内容接一句，但别翻旧账、别追问隐私。',
     '- 不要自我介绍，不要说「我是 AI / 模型」，不要解释为什么找他。',
     '- 不要用颜文字堆砌，最多一个；不要用「~」。',

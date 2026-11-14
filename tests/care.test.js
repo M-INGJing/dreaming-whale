@@ -109,7 +109,11 @@ test('抖动不能盖过用户设的间隔（改成 1 分钟就得等 1 分钟�
 test('台词与清理：模板不为空、模型输出去掉引号和多余行', () => {
   assert.ok(care.CARE_TEMPLATES.length >= 5);
   for (const t of care.CARE_TEMPLATES) assert.ok(t.length >= 3 && t.length <= 20, '台词长度不合适：' + t);
+  // 别把「累不累」写进兜底台词：白天主动搭话总问累不累很烦人
+  assert.ok(!care.CARE_TEMPLATES.some((t) => /累不累|太累/.test(t)), '兜底台词里不该再有「累不累」');
   assert.equal(care.pickTemplate(() => 0), care.CARE_TEMPLATES[0]);
+  // avoid：跳过上一句，别连着说同一句
+  assert.equal(care.pickTemplate(() => 0, care.CARE_TEMPLATES[0]), care.CARE_TEMPLATES[1]);
   assert.equal(care.cleanCareText('“在干啥呢”\n多余的话'), '在干啥呢');
   assert.equal(care.cleanCareText('  \n  忙完了没，累不累~ '), '忙完了没，累不累');
 });
@@ -121,7 +125,7 @@ test('提示词带上时间和称呼，且明确禁止暴露 AI 身份', () => {
     name: '阿螈',
     hour: 22,
   });
-  assert.match(system, /在干啥|累不累/, '要说明目的是关心对方');
+  assert.match(system, /在干啥|关心对方/, '要说明目的是关心对方');
   assert.match(system, /AI|模型/, '要明确禁止暴露 AI 身份');
   assert.match(system, /晚上/, '22 点要按晚上处理');
   assert.match(user, /今天加班/, '要带上最近的聊天上下文');
