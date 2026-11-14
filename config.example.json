@@ -118,6 +118,7 @@
     },
     "pipelineWorkers": 4,
     "pipelineQueueLimit": 4,
+    "debounceMs": 1500,
     "lowBatteryPercent": 5,
     "ignoreSenders": [
       "微信团队",

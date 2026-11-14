@@ -146,15 +146,21 @@ class MessagePipeline:
         self._drop_count = {}      # chat -> 本窗口内已丢条数
         self.stats = {"in": 0, "done": 0, "dropped": 0, "errors": 0, "peak_queue": 0}
 
-    def submit(self, chat, fn, *args):
-        """投递一条任务。返回 False 表示已经 close。"""
+    def submit(self, chat, fn, *args, delay=0.0):
+        """投递一条任务。返回 False 表示已经 close。
+
+        delay：这一轮开始前先等多久（秒）。只对「会话从空闲进入第一轮」生效——
+        处理期间补进来的任务不再等，否则每补一条都要再等一个窗口，回复会被无限推迟。
+        私聊连发合并就靠它：第一条到达后等一个窗口，后续几条自然攒进 MessageBatches。
+        """
         chat = chat or "_"
         with self._guard:
             if self._closed:
                 return False
             self.stats["in"] += 1
             q = self._queues.setdefault(chat, [])
-            q.append((fn, args))
+            wait = max(0.0, float(delay or 0.0)) if chat not in self._running else 0.0
+            q.append((fn, args, wait))
             if len(q) > self.per_chat_limit:
                 # 同一会话积压太多：丢最旧的。这是安全网 —— 正常情况下走不到：
                 # engine 每个会话同时只排一个 flush 任务，消息本身由
@@ -197,7 +203,11 @@ class MessagePipeline:
                     self._running.discard(chat)
                     self._queues.pop(chat, None)
                     return
-                fn, args = q.pop(0)
+                fn, args, wait = q.pop(0)
+            # 私聊防抖窗口：本轮第一条到达后先等一小会儿，让连发的后续几条进 MessageBatches。
+            # 等待放在 worker 里（每会话同一时刻只有一个 flush），最坏几个会话同时等，池子够用。
+            if wait > 0:
+                time.sleep(wait)
             try:
                 fn(*args)
                 with self._guard:

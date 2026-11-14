@@ -524,8 +524,14 @@ class ReceiverMixin:
                 return
             chat = username or 'unknown'
             if self.batches.push(chat, msg):
+                # 私聊连发防抖：第一条到达后先等一个窗口，让「一句话分几条发」的后续
+                # 一并攒进 batches 再统一回。群聊不等（多人交替，合并语义不同）；
+                # / 开头的命令立即处理，别让重置之类的操作也慢半拍。
+                is_group = str(username).endswith('@chatroom')
+                text = str(msg.get('content') or '').strip()
+                delay = 0.0 if (is_group or text.startswith('/')) else max(0, int(getattr(G, 'DEBOUNCE_MS', 0) or 0)) / 1000.0
                 try:
-                    queued = self.pipeline.submit(chat, self.flush_chat, chat, listener)
+                    queued = self.pipeline.submit(chat, self.flush_chat, chat, listener, delay=delay)
                 except Exception:
                     queued = False
                 if not queued:

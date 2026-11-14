@@ -226,7 +226,8 @@ class BridgeRuntime(AccountMixin, WindowMixin, SenderMixin, StickerMixin, VoiceM
         G.log('开始监听新消息…（Ctrl+C 退出）')
         self.pipeline = G.MessagePipeline(workers=G.PIPELINE_WORKERS, per_chat_limit=G.PIPELINE_QUEUE_LIMIT, log=G.log)
         self.batches = G.MessageBatches(limit=max(4, G.PIPELINE_QUEUE_LIMIT * 2), log=G.log)
-        G.log('消息调度：%d 个 worker（同一会话串行、跨会话并发，连发的几条合并成一次）' % G.PIPELINE_WORKERS)
+        G.log('消息调度：%d 个 worker（同一会话串行、跨会话并发，连发的几条合并成一次；私聊防抖 %d ms）'
+              % (G.PIPELINE_WORKERS, G.DEBOUNCE_MS))
         G.threading.Thread(target=self.sticker_test_loop, daemon=True).start()
         G.threading.Thread(target=self.voice_test_loop, daemon=True, name='voice-send-test').start()
         self.listener = Listener(self.db, interval=0.4)

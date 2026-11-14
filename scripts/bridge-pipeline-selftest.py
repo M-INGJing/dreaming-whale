@@ -108,6 +108,38 @@ def test_exception_does_not_stop():
     check("error counted", p.stats["errors"], 1)
 
 
+def test_debounce_delay():
+    print("[debounce] first turn waits, follow-up does not")
+    p = MessagePipeline(workers=2)
+    t0 = time.time()
+    stamps = []
+
+    def first():
+        stamps.append(("first", time.time() - t0))
+
+    def second():
+        stamps.append(("second", time.time() - t0))
+
+    p.submit("A", first, delay=0.30)
+    time.sleep(0.05)                     # 第一条还在窗口里时补充进来
+    p.submit("A", second, delay=0.50)    # 会话已在 running：即使带 delay 也不该再等
+    p.close(wait=True)
+    check_true("first ran after the window", 0.25 <= stamps[0][1] < 0.7, "%.2fs" % stamps[0][1])
+    check_true("follow-up did not wait again",
+               stamps[1][1] - stamps[0][1] < 0.2, "%.2fs" % (stamps[1][1] - stamps[0][1]))
+
+
+def test_debounce_zero():
+    print("[debounce] delay=0 keeps immediate behavior")
+    p = MessagePipeline(workers=1)
+    t0 = time.time()
+    ran = []
+    p.submit("A", lambda: ran.append(time.time() - t0))
+    p.close(wait=True)
+    check_true("ran without waiting", bool(ran) and ran[0] < 0.15,
+               "%.3fs" % (ran[0] if ran else -1))
+
+
 def test_close():
     print("[close] submit after close returns False")
     p = MessagePipeline(workers=1)
@@ -192,6 +224,8 @@ def main():
     test_cross_chat_parallel()
     test_queue_limit()
     test_exception_does_not_stop()
+    test_debounce_delay()
+    test_debounce_zero()
     test_close()
     test_status()
     test_batches_merge()

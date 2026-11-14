@@ -89,6 +89,8 @@ from send_state import SEND_STATE, ChatIdentityError, DraftDirtyError, _chat_ide
 BG_SEND = {'enabled': True, 'charGap': 0.04, 'verify': True, 'charMode': 'auto', 'fallback': True, 'strip': True, 'unhide': True}
 PIPELINE_WORKERS = 4
 PIPELINE_QUEUE_LIMIT = 8
+# 私聊连发合并窗口（毫秒）。0 = 关闭，回到「来一条回一条」。见 docs/私聊消息防抖方案.md
+DEBOUNCE_MS = 1500
 # 下面这 7 个开关必须在**读配置之前**就有默认值：config.json 解析失败时
 # （手填 Windows 路径写了单反斜杠就是典型），上面那个 try 会在 json.load 处
 # 整段中断，后面所有赋值一个都执行不到。以前没有默认值，main() 里一读
@@ -134,12 +136,16 @@ try:
     try:
         PIPELINE_WORKERS = max(1, min(16, int(_wechat.get('pipelineWorkers', 4) or 4)))
         PIPELINE_QUEUE_LIMIT = max(1, min(32, int(_wechat.get('pipelineQueueLimit', 8) or 8)))
+        DEBOUNCE_MS = max(0, min(10000, int(_wechat.get('debounceMs', 1500))))
     except Exception:
         pass
     try:
         _pw = os.environ.get('WHALE_PIPELINE_WORKERS')
         if _pw:
             PIPELINE_WORKERS = max(1, min(16, int(_pw)))
+        _dm = os.environ.get('WHALE_DEBOUNCE_MS')
+        if _dm is not None and str(_dm).strip() != '':
+            DEBOUNCE_MS = max(0, min(10000, int(_dm)))
     except Exception:
         pass
     ACCOUNT_GUARD = _as_bool(_wechat.get('accountGuard', True), True)
@@ -255,6 +261,7 @@ def reload_config(path=None):
     try:
         PIPELINE_WORKERS = max(1, min(16, int(w.get('pipelineWorkers', PIPELINE_WORKERS) or 4)))
         PIPELINE_QUEUE_LIMIT = max(1, min(32, int(w.get('pipelineQueueLimit', PIPELINE_QUEUE_LIMIT) or 8)))
+        DEBOUNCE_MS = max(0, min(10000, int(w.get('debounceMs', DEBOUNCE_MS))))
     except Exception:
         pass
     ACCOUNT_GUARD = _as_bool(w.get('accountGuard', True), True)
