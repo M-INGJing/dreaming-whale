@@ -1630,7 +1630,7 @@ class Bot {
     // 已经吐过字就不能重试，否则用户会看到两段拼接的回复。
     while (true) {
       try {
-        for await (const piece of this.llm.stream({ system: decision.system, turns: decision.turns, signal })) {
+        for await (const piece of this.llm.stream({ system: decision.system, turns: decision.turns, signal, webSearch: true })) {
           sent = true;
           yield piece;
         }
@@ -2059,7 +2059,7 @@ class Bot {
       } else if (decision.mock) {
         text = decision.text;
       } else {
-        text = await this.llm.complete({ system: decision.system, turns: decision.turns, signal });
+        text = await this.llm.complete({ system: decision.system, turns: decision.turns, signal, webSearch: true });
         // 模型有时候只会把别人说过的话复读一遍，或者重复自己上一句，这种重写一次
         const heardList = this.recentHeard(decision);
         const ownList = this.recentOwn(decision);
@@ -2075,6 +2075,7 @@ class Bot {
               system: decision.system + '\n\n【重写要求】你刚才的回答' + why + '，不合格。现在重写：换一个说法，给出新的信息或明确态度；不能出现对方原句，也不能重复你上面说过的话。',
               turns: decision.turns,
               signal,
+              webSearch: true,
             });
             // 只有重写合格才采用（M18）：以前不合格时 `else text = retry || text` 照样把
             // 还在复读的 retry 发出去，这道校验形同虚设；不合格就保留原文，finalize 里
@@ -2095,7 +2096,7 @@ class Bot {
       // 上下文超长：砍掉一半 turns 只重试一次，保留当前消息；不要退化成只发当前一句。
       if (isContextLengthError(err) && this.shrinkTurnsForContext(decision)) {
         try {
-          retried = await this.llm.complete({ system: decision.system, turns: decision.turns, signal });
+          retried = await this.llm.complete({ system: decision.system, turns: decision.turns, signal, webSearch: true });
           this.logger && this.logger.warn('上下文超长，半窗重试成功');
         } catch (err2) {
           this.logger && this.logger.error('半窗重试仍失败：' + describeError(err2));
@@ -2111,7 +2112,7 @@ class Bot {
         const switched = this.llm.switchFallback();
         if (switched) {
           try {
-            retried = await this.llm.complete({ system: decision.system, turns: decision.turns, signal });
+            retried = await this.llm.complete({ system: decision.system, turns: decision.turns, signal, webSearch: true });
             this.logger && this.logger.warn(`已切到备用服务商 ${switched.label} 并重试成功`);
           } catch (err2) {
             this.logger && this.logger.error('备用服务商也失败了：' + describeError(err2));
@@ -2122,7 +2123,7 @@ class Bot {
         try {
           const sys = sanitizeForModel(decision.system || '');
           const cur = sanitizeForModel((decision.msg && (decision.msg.cleanText || decision.msg.text)) || '');
-          retried = await this.llm.complete({ system: sys, turns: cur ? [{ role: 'user', content: cur }] : [], signal });
+          retried = await this.llm.complete({ system: sys, turns: cur ? [{ role: 'user', content: cur }] : [], signal, webSearch: true });
           this.logger && this.logger.warn('内容审核拦截，已丢掉历史用精简上下文重试成功');
         } catch (err2) {
           this.logger && this.logger.error('精简重试仍失败：' + describeError(err2));

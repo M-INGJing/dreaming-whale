@@ -148,6 +148,34 @@ test('payload 会带上温度、max_tokens 和系统提示', () => {
   assert.equal(client.endpoint(), 'http://127.0.0.1:1/chat/completions');
 });
 
+// ── 官方托管联网搜索（deepseek_web_search 工具）──────────────────────────
+// 通用网页搜索改由 DeepSeek 服务端托管：声明工具后模型自动搜索并附引用，
+// 客户端不写工具调用循环。仅官方 provider 的 deepseek-flash 生效。
+
+test('canNativeSearch 只对官方 deepseek-flash 生效', () => {
+  assert.equal(makeClient('http://127.0.0.1:1', { model: 'deepseek-flash' }).canNativeSearch(), true);
+  assert.equal(makeClient('http://127.0.0.1:1', { model: 'deepseek-v4-pro' }).canNativeSearch(), false);
+  assert.equal(makeClient('http://127.0.0.1:1', { model: 'deepseek-chat' }).canNativeSearch(), false);
+});
+
+test('webSearch 开启时声明 deepseek_web_search 工具并去掉 temperature', () => {
+  const client = makeClient('http://127.0.0.1:1', { model: 'deepseek-flash' });
+  const payload = client.buildPayload({ system: 's', turns: [{ role: 'user', content: 'hi' }], webSearch: true });
+  assert.deepEqual(payload.tools, [{ type: 'deepseek_web_search' }]);
+  assert.equal('temperature' in payload, false);
+});
+
+test('webSearch 未开、模型不支持或 native 关闭时不声明工具', () => {
+  const flash = makeClient('http://127.0.0.1:1', { model: 'deepseek-flash' });
+  assert.equal('tools' in flash.buildPayload({ system: 's', turns: [{ role: 'user', content: 'hi' }] }), false);
+  const chat = makeClient('http://127.0.0.1:1', { model: 'deepseek-chat' });
+  assert.equal('tools' in chat.buildPayload({ system: 's', turns: [{ role: 'user', content: 'hi' }], webSearch: true }), false);
+  const off = makeClient('http://127.0.0.1:1', { model: 'deepseek-flash' });
+  off.config.websearch = { native: false };
+  off.reload();
+  assert.equal('tools' in off.buildPayload({ system: 's', turns: [{ role: 'user', content: 'hi' }], webSearch: true }), false);
+});
+
 // ── 空响应：以前只报一句「空泡泡」，查不出原因 ──────────────────────────
 // 现场（2026-11-04 00:30）：同一条日志里 memory/extractor 和 pipeline 都拿到
 // 「咕噜…这次只吐出了个空泡泡」，两条独立的提示词都空 → 不是记忆坏了，是模型返回了空内容。

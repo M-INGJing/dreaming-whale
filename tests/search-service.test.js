@@ -37,26 +37,30 @@ test('路由完整意图直接驱动数据源，旧格式仍能回退规则', as
   assert.match(value.text, /open|weatherResult/);
 });
 
-test('空气质量、台风、远期和指定日期不拿今明天气冒充答案', async () => {
+test('空气质量、台风、远期和指定日期不拿今明天气冒充答案，交给官方搜索', async () => {
   for (const text of ['北京空气质量', '北京台风路径', '北京后天天气', '北京周末天气', '北京2027年1月1日天气']) {
     const f = fixture({ kind: 'weather', city: '北京' });
-    await f.run(text);
-    assert.deepEqual(f.calls.map(x => x.method), ['searchResult'], text);
+    const value = await f.run(text);
+    assert.deepEqual(f.calls.map(x => x.method), [], text);
+    assert.equal(value.status, 'skipped');
+    assert.equal(value.reason, 'native_search');
   }
 });
 
-test('模型明确要求普通检索时不再用关键词覆盖为热榜', async () => {
+test('模型明确要求普通检索时由官方托管搜索接管，不再自建抓取', async () => {
   const f = fixture({ kind: 'web', site: 'weibo', query: '微博 某事件 热搜 原因' });
-  await f.run('微博某事件为什么上热搜');
-  assert.equal(f.calls[0].method, 'searchResult');
-  assert.match(f.calls[0].args[0], /site:weibo\.com$/);
+  const value = await f.run('微博某事件为什么上热搜');
+  assert.deepEqual(f.calls.map(x => x.method), []);
+  assert.equal(value.status, 'skipped');
+  assert.equal(value.reason, 'native_search');
 });
 
-test('路由失败时具体主题新闻仍查主题，不取全站榜单', async () => {
+test('路由失败时主题新闻交给官方托管搜索，不取全站榜单', async () => {
   const f = fixture({ need: false, failed: true });
-  await f.run('今天小米汽车的新闻有哪些');
-  assert.equal(f.calls[0].method, 'searchResult');
-  assert.match(f.calls[0].args[0], /小米汽车/);
+  const value = await f.run('今天小米汽车的新闻有哪些');
+  assert.deepEqual(f.calls.map(x => x.method), []);
+  assert.equal(value.status, 'skipped');
+  assert.equal(value.reason, 'native_search');
 });
 
 test('问题地点优先于默认城市，无法解析也不偷偷换成默认城市', async () => {
@@ -68,12 +72,12 @@ test('问题地点优先于默认城市，无法解析也不偷偷换成默认�
   assert.equal(f.calls[0].args[1].place, place, '已解析地点不重复地理编码');
   f.calls.length = 0;
   f.deps.places.geocodeCity = async () => null;
-  await f.run('杭州明天会下雨吗', { config: { city: '上海' } });
-  assert.equal(f.calls[0].method, 'searchResult');
-  assert.doesNotMatch(f.calls[0].args[0], /上海/);
+  const value2 = await f.run('杭州明天会下雨吗', { config: { city: '上海' } });
+  assert.deepEqual(f.calls.map(x => x.method), []);
+  assert.equal(value2.status, 'skipped');
 });
 
-test('省略地点时使用配置或 IP，天气失败保留明天需求', async () => {
+test('省略地点时使用配置或 IP，天气失败不再回退自建搜索', async () => {
   const f = fixture({ kind: 'weather', query: '明天 下雨' });
   f.deps.places.ipCity = async () => '杭州';
   f.deps.providers.weatherResult = async (city, opts) => {
@@ -82,25 +86,20 @@ test('省略地点时使用配置或 IP，天气失败保留明天需求', async
     return result([], { status: 'failed', reason: 'http_error', attempts: [{ provider: 'open-meteo', status: 'failed', statusCode: 503 }] });
   };
   const value = await f.run('明天会下雨吗');
-  assert.equal(value.status, 'ok');
-  assert.match(f.calls[0].args[0], /杭州.*明天/);
+  assert.equal(value.status, 'skipped');
+  assert.equal(value.reason, 'native_search');
   assert.ok(value.attempts.some(x => x.provider === 'open-meteo' && x.status === 'failed'));
 });
 
-test('关闭联网不读取历史，空结果与异常有不同状态', async () => {
+test('关闭联网不读取历史，普通检索交给官方托管搜索', async () => {
   const f = fixture();
   const off = await f.run('查一下价格', { config: { enabled: false }, history: () => { throw new Error('must not read'); } });
   assert.equal(off.status, 'skipped');
   assert.equal(f.calls.length, 0);
-  f.deps.providers.searchResult = async () => result();
-  assert.equal((await f.run('查一下价格')).status, 'empty');
-  f.deps.providers.searchResult = async () => { throw new Error('query and private response'); };
-  const logs = [];
-  const failed = await f.run('查一下价格', { trace: (stage, data) => logs.push({ stage, ...data }) });
-  assert.equal(failed.status, 'failed');
-  assert.equal(failed.text, '');
-  assert.ok(logs.some(x => x.description?.includes('detail=network_error')));
-  assert.doesNotMatch(JSON.stringify(logs), /private|查一下价格/);
+  const value = await f.run('查一下价格');
+  assert.equal(value.status, 'skipped');
+  assert.equal(value.reason, 'native_search');
+  assert.deepEqual(f.calls.map(x => x.method), []);
 });
 
 test('调用者取消能打断路由，不触发后续检索', async () => {
@@ -148,8 +147,9 @@ test('路由北京时间与机器本地时区无关', () => {
   assert.match(systemFor(new Date('2026-11-06T20:30:00Z')), /2026-11-07 周六 04:30（北京时间）/);
 });
 
-test('模型识别出的时间范围不会在改写查询后丢失', async () => {
+test('模型识别出的时间范围不会再触发自建抓取', async () => {
   const f = fixture({ kind: 'web', timeRange: 'today', fresh: 'any', query: '发布会 新闻' });
-  await f.run('今儿有什么发布会消息');
-  assert.equal(f.calls[0].args[1].maxAgeDays, 2);
+  const value = await f.run('今儿有什么发布会消息');
+  assert.equal(value.status, 'skipped');
+  assert.equal(value.reason, 'native_search');
 });

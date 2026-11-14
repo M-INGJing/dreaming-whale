@@ -293,6 +293,9 @@ class DeepSeekClient {
     const ds = this.config.deepseek || {};
     this.frequencyPenalty = Number(ds.frequencyPenalty) || 0;
     this.presencePenalty = Number(ds.presencePenalty) || 0;
+    // 官方托管联网搜索（deepseek_web_search 工具）：默认开，websearch.native=false 才关。
+    const ws = this.config.websearch || {};
+    this.nativeSearch = ws.native !== false;
     this.maxTokens = ds.maxTokens || 700;
     this.timeoutMs = ds.timeoutMs || 45000;
     // 聊天默认关思考（快）；开了先想一遍再答。后台抽取显式传 thinking:false。
@@ -354,6 +357,15 @@ class DeepSeekClient {
   /** 这个 provider|model 该怎么关 / 开思考 */
   thinkingPlan() {
     return thinkingPlan(this.provider, this.model);
+  }
+
+  /**
+   * 能否用 DeepSeek 官方托管联网搜索（deepseek_web_search 工具）。
+   * 仅官方 provider + flash 系列（V4.1-Flash）在 Chat Completions 下支持，且
+   * websearch.native 没被显式关掉。其它服务商/模型不声明，避免 400 或静默忽略。
+   */
+  canNativeSearch() {
+    return this.nativeSearch !== false && this.provider === 'deepseek' && /flash/i.test(String(this.model || ''));
   }
 
   /**
@@ -544,7 +556,7 @@ class DeepSeekClient {
    */
   buildPayload({
     system, turns = [], stream = false, maxTokens, safe = false,
-    thinking, allowOverflow = false, thinkingParam, bigBudget = false,
+    thinking, allowOverflow = false, thinkingParam, bigBudget = false, webSearch = false,
   }) {
     const messages = [];
     if (system) messages.push({ role: 'system', content: system });
@@ -593,6 +605,12 @@ class DeepSeekClient {
     // DeepSeek 流式默认不回 usage；显式要一下，用来校准 token 估算。
     // 其它兼容服务不认这个字段，别硬塞。
     if (stream && this.provider === 'deepseek') payload.stream_options = { include_usage: true };
+    // DeepSeek 官方托管联网搜索：声明工具后由服务端自动搜索并附引用，客户端不写调用循环。
+    // 只对官方 deepseek-flash 生效；此时 temperature 由服务端接管，别再发（避免被静默忽略误导）。
+    if (webSearch && this.canNativeSearch()) {
+      payload.tools = [{ type: 'deepseek_web_search' }];
+      delete payload.temperature;
+    }
     return payload;
   }
 
@@ -740,7 +758,7 @@ class DeepSeekClient {
    *   5) 仍空 → 抛 LlmError(empty, detail)，detail 带 finish/usage/reasoning_tokens。
    * 参数被 400/422 拒时（不同服务商字段名不一样），按候选表换下一档再试。
    */
-  async complete({ system, turns, maxTokens, signal, thinking, allowOverflow = false } = {}) {
+  async complete({ system, turns, maxTokens, signal, thinking, allowOverflow = false, webSearch = false } = {}) {
     this.lastUsage = null;
     let lastErr = null;
     let sawDegenerate = false;
@@ -774,6 +792,7 @@ class DeepSeekClient {
           allowOverflow: allowOverflow && !thinkingFallback,
           thinkingParam,
           bigBudget,
+          webSearch,
         });
         const { res } = await this._open(payload, { stream: false, signal });
         if (res.statusCode !== 200) throw await this._errorFrom(res, { signal });
@@ -971,9 +990,9 @@ class DeepSeekClient {
   /**
    * 流式，异步生成器，每次 yield 一段新增文本。
    */
-  async *stream({ system, turns, signal }) {
+  async *stream({ system, turns, signal, webSearch = false }) {
     this.lastUsage = null;
-    const payload = this.buildPayload({ system, turns, stream: true });
+    const payload = this.buildPayload({ system, turns, stream: true, webSearch });
     const { req, res } = await this._open(payload, { signal, stream: true });
     if (res.statusCode !== 200) throw await this._errorFrom(res);
     res.setEncoding('utf8');

@@ -146,8 +146,9 @@
     }
   },
   "websearch": {
-    "_说明": "问天气/新闻等实时问题时联网现搜。city 填你所在的城市（比如「上海」），问她天气时才准；留空就按她收到的原话搜（可能搜到别的城市）。enabled=false 关闭所有联网",
+    "_说明": "联网搜索。native=true 用 DeepSeek 官方托管搜索（deepseek_web_search 工具，deepseek-flash 下由服务端自动搜索并附引用，有额外费用约 5 元/千次）；native=false 则不声明该工具。city 填所在城市用于天气补全；enabled=false 关闭所有联网",
     "enabled": true,
+    "native": true,
     "city": "",
     "timeoutMs": 8000
   },

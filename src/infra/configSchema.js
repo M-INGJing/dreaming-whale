@@ -133,6 +133,9 @@ const FIELDS = {
   'links.enabled': { type: 'bool' },
   'links.timeoutMs': { type: 'int', min: 1000, max: 60000 },
   'websearch.enabled': { type: 'bool' },
+  // 官方托管联网搜索（deepseek_web_search 工具）：true 时 deepseek-flash 由 DeepSeek 服务端
+  // 自动搜索并附引用；false 则完全不声明该工具。有额外费用（搜索约 5 元/千次）。
+  'websearch.native': { type: 'bool' },
   // 语义路由（每句话先问一次模型「要不要联网」）：不配时只在像问句/命中事实词时才问；
   // true 则每句都问（更准，每句多 ~2 秒）；false 则完全按关键词。
   'websearch.semanticRoute': { type: 'bool' },

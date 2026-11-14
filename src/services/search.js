@@ -4,7 +4,6 @@ const web = require('../adapters/websearch');
 const weather = require('../adapters/search/weather');
 const router = require('../adapters/searchRouter');
 const policy = require('../core/search/policy');
-const { effectiveMaxAgeDays } = require('../core/search/quality');
 const { result, formatResult } = require('../core/search/result');
 const { remaining, errorInfo, report, searchError } = require('../adapters/search/transport');
 
@@ -74,7 +73,6 @@ async function search({ text = '', history = [], llm, config = {}, now = new Dat
     say('decision', { decision: 'run', reason: route.need ? 'router_requested' : gate.route ? 'router_failed_keyword_fallback' : 'rules_requested',
       routeFailed: Boolean(route.failed), budgetMs: options().timeoutMs });
     const intent = policy.intent(text, route);
-    let q = intent.query;
     const specializedDeadline = Math.min(deadline, Date.now() + Math.floor(options().timeoutMs * 0.6));
     const specializedOptions = () => ({ ...options(), deadline: specializedDeadline,
       timeoutMs: Math.max(0, specializedDeadline - Date.now()) });
@@ -98,19 +96,15 @@ async function search({ text = '', history = [], llm, config = {}, now = new Dat
         if (value.status === 'ok') return finish(value);
         remember(value);
       }
-      // 补地点时保留“明天/带伞”等原需求，避免天气失败后退化成泛查城市天气。
-      if (city && !q.includes(city)) q = city + ' ' + q;
     }
     if (intent.kind === 'hotlist' && active()) {
       const value = await call(intent.site || 'toutiao', () => providers.hotlistResult(intent.site || 'toutiao', { ...specializedOptions(), limit: 10 }));
       if (value.status === 'ok') return finish(value);
       remember(value);
     }
-    if (!active()) throw searchError(controller.signal.aborted ? 'aborted' : 'deadline_exceeded');
-    if (policy.DOMAINS[intent.site]) q = q.replace(/\bsite:[a-z0-9.-]+/gi, '').trim() + ' site:' + policy.DOMAINS[intent.site];
-    const value = await call('web', () => providers.searchResult(q, { ...options(), limit: 4,
-      maxAgeDays: effectiveMaxAgeDays(`${text} ${q}`, intent.fresh, intent.timeRange) }));
-    return finish(value);
+    // 通用网页搜索已由 DeepSeek 官方托管搜索接管（deepseek_web_search 工具：模型在生成回复时
+    // 自动搜索并附引用）。这里不再自建 bing/so360 抓取；天气/热搜专用路由已在上面的分支处理。
+    return skipped('native_search');
   };
   let timer, abort;
   try {
