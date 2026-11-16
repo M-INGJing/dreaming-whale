@@ -373,7 +373,7 @@ class Bot {
   async tryXhs({ clean, key, msg, atMe }) {
     const text = String((clean && clean.text) || '').trim();
     if (!text || text.length > 300) return null;
-    if (!this.xhsService) this.xhsService = new XhsService(this.config, { logger: this.logger });
+    if (!this.xhsService) this.xhsService = new XhsService(this.config, { logger: this.logger, llm: this.llm });
     const reply = await this.xhsService.handle(text, { chatId: msg.chatId || key });
     if (!reply) return null;
     return { action: 'reply', key, msg, atMe, canned: reply, reason: 'xhs' };

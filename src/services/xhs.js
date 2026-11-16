@@ -17,6 +17,7 @@ const features = require('../infra/features');
 
 const MAX_TITLE = 20;
 
+/** 正则先抽一遍：标题/内容标签 + #标签 + 图:路径。抽得不自信时标 weak，交给模型再抽。 */
 function parsePublish(text) {
   let body = String(text || '')
     .replace(/^(?:发|发布|上传|po|post)\s*(?:一下|个|到|上)?\s*(?:小红书|红书|xhs)[：:，,\s]*/i, '')
@@ -29,19 +30,50 @@ function parsePublish(text) {
     .replace(/#([^\s#，,。！!？?]{1,20})/g, (_, tag) => { tags.push(tag); return ' '; });
   body = body.replace(/\s+/g, ' ').trim();
 
-  // 抽「标题 / 内容」标签（可写可不写冒号）
   let title = '';
   let content = body;
+  let explicitTitle = false;
   const tm = body.match(/^(?:标题|title)\s*[：:，,\s]*([^\n，,。！!？?]{1,40})/i);
-  if (tm) { title = tm[1].trim(); content = body.slice(tm[0].length).replace(/^[，,。！!？?\s]+/, '').trim(); }
+  if (tm) { title = tm[1].trim(); content = body.slice(tm[0].length).replace(/^[，,。！!？?\s]+/, '').trim(); explicitTitle = true; }
   const cm = content.match(/^(?:内容|正文|body)\s*[：:，,\s]*([\s\S]*)$/i);
   if (cm) content = cm[1].trim();
   if (!title) {
     const first = content.split(/[\n。！!？?]/)[0].trim();
     title = first ? first.slice(0, MAX_TITLE) : content.slice(0, MAX_TITLE);
   }
-  return { title: title.slice(0, MAX_TITLE), content: content.replace(/\s+/g, ' ').trim(), tags: tags.slice(0, 10), images: images.slice(0, 9) };
+  return {
+    title: title.slice(0, MAX_TITLE),
+    content: content.replace(/\s+/g, ' ').trim(),
+    tags: tags.slice(0, 10),
+    images: images.slice(0, 9),
+    // 没写「标题」标签时，标题是「第一句截断」猜出来的，不自信 → 交给模型重抽
+    weak: !explicitTitle,
+  };
 }
+
+/** 模型抽出的 JSON → 草稿字段；标题/正文缺一不可，否则返回 null。 */
+function parseModelDraft(raw) {
+  try {
+    const jsonText = (String(raw || '').match(/\{[\s\S]*\}/) || [''])[0];
+    if (!jsonText) return null;
+    const obj = JSON.parse(jsonText);
+    const title = String(obj.title || '').trim().slice(0, MAX_TITLE);
+    const content = String(obj.content || '').replace(/\s+/g, ' ').trim().slice(0, 5000);
+    if (!title || !content) return null;
+    const tags = (Array.isArray(obj.tags) ? obj.tags : [])
+      .map((t) => String(t).replace(/^#/, '').trim()).filter(Boolean).slice(0, 10);
+    return { title, content, tags };
+  } catch {
+    return null;
+  }
+}
+
+const XHS_PARSE_SYSTEM = [
+  '你是小红书发布解析器。把用户这句话里「要发到小红书的那条笔记」抽出来。',
+  '只输出 JSON，不要解释、不要代码块围栏：{"title":"≤20字的标题","content":"正文（不含 # 标签）","tags":["标签"]}',
+  '标题要能概括内容、不超过 20 字；正文是笔记主体；tags 只收 # 开头的话题词。',
+  '如果实在没有可发的内容，输出 {"title":"","content":"","tags":[]}。',
+].join('\n');
 
 function parseIntent(text) {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
@@ -67,10 +99,11 @@ function parseIntent(text) {
 }
 
 class XhsService {
-  constructor(config, { client = null, logger = null, now = () => Date.now() } = {}) {
+  constructor(config, { client = null, llm = null, logger = null, now = () => Date.now() } = {}) {
     this.config = config || {};
     this.logger = logger;
     this.now = now;
+    this.llm = llm;
     this.client = client || new XhsClient({
       baseUrl: this.config.xhs && this.config.xhs.url,
       token: this.config.xhs && this.config.xhs.token,
@@ -164,7 +197,7 @@ class XhsService {
 
   async doDraft(id, st, text) {
     if (!this.enabled()) return '小红书功能还没开。';
-    const draft = parsePublish(text);
+    const draft = await this.parseDraft(text);
     if (!draft.title || !draft.content) {
       return '发小红书要有个标题和正文，比如「发小红书：标题 今天吃啥，内容 随便聊聊 #美食」。';
     }
@@ -173,6 +206,40 @@ class XhsService {
     const imgNote = draft.images.length ? `（配图 ${draft.images.length} 张）` : '（⚠️ 没配图：小红书图文笔记至少要一张图，先发张图/给个图片路径）';
     const body = draft.content.length > 100 ? draft.content.slice(0, 100) + '…' : draft.content;
     return `草稿好了，确认发吗？\n标题：${draft.title}\n正文：${body}\n标签：${draft.tags.length ? draft.tags.map((x) => '#' + x).join(' ') : '无'}${imgNote}\n回复「发」确认，回复「不发」取消。`;
+  }
+
+  /**
+   * 发布参数两段式抽取：正则先抽（标签/图片/明确标题），正则不自信（没写「标题」标签）时
+   * 让模型把标题/正文/标签抽成 JSON，替换「第一句截断当标题」的脆弱猜法。模型不可用/抽失败就退回正则。
+   */
+  async parseDraft(text) {
+    const base = parsePublish(text);
+    if (!base.weak) return base;
+    if (!this.llm || this.llm.isMock || typeof this.llm.complete !== 'function') return base;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const raw = await this.llm.complete({
+        system: XHS_PARSE_SYSTEM,
+        turns: [{ role: 'user', content: String(text).slice(0, 300) }],
+        maxTokens: 300,
+        signal: controller.signal,
+      });
+      const m = parseModelDraft(raw);
+      if (m) {
+        return {
+          title: m.title,
+          content: m.content,
+          tags: Array.from(new Set([...m.tags, ...base.tags])).slice(0, 10),
+          images: base.images,
+        };
+      }
+    } catch {
+      /* 模型抽失败就退回正则 */
+    } finally {
+      clearTimeout(timer);
+    }
+    return base;
   }
 
   async doPublish(id, st) {
@@ -202,4 +269,4 @@ class XhsService {
   }
 }
 
-module.exports = { XhsService, parseIntent, parsePublish, MAX_TITLE };
+module.exports = { XhsService, parseIntent, parsePublish, parseModelDraft, XHS_PARSE_SYSTEM, MAX_TITLE };

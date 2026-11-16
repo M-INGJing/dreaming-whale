@@ -7,7 +7,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { parseIntent, parsePublish, XhsService } = require('../src/services/xhs');
+const { parseIntent, parsePublish, parseModelDraft, XhsService } = require('../src/services/xhs');
 const { XhsClient, XhsError, XhsVerificationError, parseCount, normalizeFeeds } = require('../src/adapters/xhs/client');
 
 const CONFIG = {
@@ -173,4 +173,47 @@ test('parseCount：万 / k / 空', () => {
   assert.equal(parseCount('3k'), 3000);
   assert.equal(parseCount(''), 0);
   assert.equal(parseCount('12'), 12);
+});
+
+/* ------------------------------ 模型辅助解析（两段式） ------------------------------ */
+
+function mockLlm(json) {
+  return { isMock: false, async complete() { return json; } };
+}
+
+test('parseModelDraft：模型 JSON → 草稿字段，标题正文缺一不可', () => {
+  const d = parseModelDraft('{"title":"下雨天","content":"今天下雨心情不好","tags":["雨天","心情"]}');
+  assert.deepEqual(d, { title: '下雨天', content: '今天下雨心情不好', tags: ['雨天', '心情'] });
+  assert.equal(parseModelDraft('{"title":"","content":"x"}'), null);
+  assert.equal(parseModelDraft('不是 JSON'), null);
+});
+
+test('parseDraft：没写「标题」标签时让模型抽，不猜第一句', async () => {
+  const svc = new XhsService(CONFIG, {
+    client: mockClient([], () => ({}), async () => ({})),
+    llm: mockLlm('{"title":"带伞提醒","content":"今天下雨心情不好，出门记得带伞","tags":["雨天"]}'),
+  });
+  const d = await svc.parseDraft('发小红书：今天下雨心情不好，出门记得带伞 #雨天 图:C:\\a.png');
+  assert.equal(d.title, '带伞提醒');
+  assert.equal(d.content, '今天下雨心情不好，出门记得带伞');
+  assert.deepEqual(d.tags, ['雨天']);
+  assert.deepEqual(d.images, ['C:\\a.png']);
+});
+
+test('parseDraft：写了「标题」标签就信正则，不调模型', async () => {
+  let called = 0;
+  const svc = new XhsService(CONFIG, {
+    client: mockClient([], () => ({}), async () => ({})),
+    llm: { isMock: false, async complete() { called += 1; return '{}'; } },
+  });
+  const d = await svc.parseDraft('发小红书：标题 今天吃啥，内容 随便写 图:C:\\a.png');
+  assert.equal(d.title, '今天吃啥');
+  assert.equal(d.content, '随便写');
+  assert.equal(called, 0);
+});
+
+test('parseDraft：模型不可用就退回正则（第一句当标题）', async () => {
+  const svc = new XhsService(CONFIG, { client: mockClient([], () => ({}), async () => ({})), llm: null });
+  const d = await svc.parseDraft('发小红书：今天下雨心情不好，出门记得带伞');
+  assert.equal(d.title, '今天下雨心情不好，出门记得带伞');
 });
