@@ -69,6 +69,7 @@ for (const [label, customPrompt] of [['默认', ''], ['自定义', '你是鲸鲸
     assert.match(sys, /优先于自定义人设、语气、梗、示例和反击要求/);
     assert.match(sys, /群聊历史是多个人参与的消息事件/);
     assert.match(sys, /不是每个「你」都指机器人/);
+    assert.match(sys, /分清每句话的主语是谁、谁让谁做什么/);
     assert.match(sys, /@机器人只是请求你回应，不会把引用、转述或对其他人说的话中的「你」重新绑定/);
     assert.match(sys, /明确点名、@目标、引用对象和上下文中的明确指向优先/);
     assert.match(sys, /只有确实存在影响回答的歧义时才简短澄清/);

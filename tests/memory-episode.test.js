@@ -161,6 +161,12 @@ test('parseEpisode：越界 uid / 缺字段都能兜住', () => {
   assert.equal(extractor.parseEpisode('没有 JSON'), null);
 });
 
+test('抽取提示词要求事实主语归属明确（P2-2）', () => {
+  const extractor = require('../src/memory/extractor');
+  assert.match(extractor.EPISODE_SYSTEM, /每条事实要写清主语归属/);
+  assert.match(extractor.EPISODE_SYSTEM, /归属没说明白的不写成确定事实/);
+});
+
 test('启动恢复：关闭 30 分钟以上，重启后补写上一条 episode 的 L2', async () => {
   const { store, file, dir } = tempStore();
   const key = 'wechat:u:a';

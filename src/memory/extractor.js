@@ -123,7 +123,7 @@ const EPISODE_SYSTEM = [
   '你在整理一段聊天 episode，供以后回忆用。只输出 JSON，不要解释、不要代码块。',
   '格式：{"summary":"...","facts":[{"uid":"u1","text":"...","confidence":0.8}],"traits":[{"uid":"u1","text":"...","confidence":0.7,"evidence":["msg_1"]}],"events":[{"uid":"u1","title":"≤20字","summary":"60~150字","keywords":["..."],"importance":0.6,"confidence":0.8}],"threads":[{"uid":"u1","text":"..."}],"resolved":[{"uid":"u1","text":"..."}],"relations":[{"a":"u1","b":"u2","text":"同事","confidence":0.8}]}',
   'summary：80~150 字，写这段在聊什么、情绪基调、有没有没解决的事；群聊必须保留「谁说的」，不要揉成「用户说」。',
-  'facts：只写这些人自己明确说过的、以后还用得上的事实；第三人称转述、玩笑、假设、反问不写。',
+  'facts：只写这些人自己明确说过的、以后还用得上的事实；每条事实要写清主语归属（是谁说的、是谁的），归属没说明白的不写成确定事实；第三人称转述、玩笑、假设、反问不写。',
   'traits：至少两次独立观察才写，confidence ≥ 0.65，evidence 填消息 id；一次情绪不写。',
   'events：一段事一条，不要每句话一条；summary 60~150 字。',
   'threads：这段里还没解决 / 还没兑现的事才写（如「欠一篇稿没交」「还没决定要不要换工作」），text ≤80 字。',
