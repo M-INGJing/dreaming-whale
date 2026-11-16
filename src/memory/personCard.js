@@ -9,6 +9,7 @@
  */
 const { LIMITS, DAY_MS } = require('./constants');
 const { shortId } = require('./hash');
+const { topicTokens } = require('../core/text');
 
 class MemoryIsolationError extends Error {
   constructor(message) {
@@ -74,6 +75,20 @@ function similarity(a, b) {
   for (const g of ta) if (setB.has(g)) hit += 1;
   // 用较长的一条做分母：短文本是长文本前缀时不能算 1.0（“标签1”≠“标签14”）
   return hit / Math.max(ta.length, tb.length);
+}
+
+/**
+ * 判断两条短语是不是「同一件事」：子串包含，或共享任一「内容 bigram」（两个连续非虚词汉字）。
+ * 供 closeThread / supersedeFact 把「已兑现」的 free-text 对齐到之前挂起的 thread / fact——
+ * 纯子串匹配对不上「欠语音还没补」→「欠语音补发了」这种带插入字 / 换词的说法。
+ */
+function topicMatch(a, b) {
+  const na = norm(a);
+  const nb = norm(b);
+  if (!na || !nb) return false;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const setB = new Set(topicTokens(nb));
+  return topicTokens(na).some((t) => setB.has(t));
 }
 
 /* ------------------------------ 建卡 / 规范化 ------------------------------ */
@@ -437,11 +452,10 @@ function addThread(card, entry, { chatId, now = Date.now() } = {}) {
 
 function closeThread(card, needle, now = Date.now()) {
   const at = nowOf(now);
-  const target = norm(needle);
   let closed = 0;
   for (const t of active(card.threads)) {
     if (t.status !== 'open') continue;
-    if (!target || norm(t.text).includes(target) || target.includes(norm(t.text))) {
+    if (!needle || topicMatch(t.text, needle)) {
       t.status = 'closed';
       t.closedAt = at;
       closed += 1;
@@ -449,6 +463,25 @@ function closeThread(card, needle, now = Date.now()) {
   }
   if (closed) card.updatedAt = at;
   return closed;
+}
+
+/**
+ * 把「已解决 / 已兑现」对应的偏好事实标记为 superseded（软失效，不删，留审计）。
+ * 供 episode 关闭时用：抽取器识别出某件「未兑现的事」已经兑现了，据此把旧事实下架。
+ */
+function supersedeFact(card, needle, now = Date.now()) {
+  const at = nowOf(now);
+  let n = 0;
+  for (const p of Array.isArray(card.preferences) ? card.preferences : []) {
+    if (p.deleted || p.superseded) continue;
+    if (!needle || topicMatch(p.text, needle)) {
+      p.superseded = true;
+      p.supersededAt = at;
+      n += 1;
+    }
+  }
+  if (n) card.updatedAt = at;
+  return n;
 }
 
 /* ------------------------------ 删除 / 合并 ------------------------------ */
@@ -493,8 +526,10 @@ module.exports = {
   addEvent,
   addThread,
   closeThread,
+  supersedeFact,
   forget,
   similarity,
+  topicMatch,
   normalizeText: norm,
   dateString,
 };

@@ -1,6 +1,6 @@
 'use strict';
 
-const { normalizeForCompare } = require('./text');
+const { normalizeForCompare, topicTokens } = require('./text');
 
 /**
  * 判断回复是不是在复读对方刚说的话（原样重复 / 只加个问号 / 短句高度重合）。
@@ -25,4 +25,32 @@ function isEcho(reply, heard) {
   return false;
 }
 
-module.exports = { isEcho };
+/* ------------------------------ 话题级去重 ------------------------------ */
+
+// 「追问」的特征：带问号 / 疑问语气词 / 疑问代词。陈述式的正常接续不拦，避免误伤
+// 「项目文档我发你了」这类给信息的句子。
+const ASK_RE = /[?？]|吗|呢|怎么|为什么|为啥|是不是|要不要|有没有|能不能|什么时候|啥时候/;
+
+/**
+ * 话题级重复：她最近自己提过的主题词，这次回复又以「追问」的姿态重新提起，
+ * 而对方最近的输入里没有任何一个内容 bigram 和这次回复重合——即对方没接这个话茬，
+ * 她却把「刚问过的事」换说法又翻出来问一遍。
+ * 字面 echo 拦不住换说法，这里补一层语义信号（部分拦，纯语义重复仍由提示词兜底）。
+ */
+function reasksTopic(reply, ownRecent, heardRecent) {
+  const replyText = String(reply || '');
+  if (!ASK_RE.test(replyText)) return false;
+  const rt = topicTokens(replyText);
+  if (!rt.length) return false;
+  const own = new Set();
+  for (const s of ownRecent || []) for (const t of topicTokens(s)) own.add(t);
+  if (!own.size) return false;
+  if (!rt.some((t) => own.has(t))) return false;
+  // 对方最近的输入里只要和这次回复有任一内容 bigram 重合，就算「对方在这条线上」，
+  // 她是在接话而不是无端重提；否则就是她把刚问过、对方没接的话茬又翻出来问。
+  const user = new Set();
+  for (const s of heardRecent || []) for (const t of topicTokens(s)) user.add(t);
+  return !rt.some((t) => user.has(t));
+}
+
+module.exports = { isEcho, topicTokens, reasksTopic };

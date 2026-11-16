@@ -59,6 +59,38 @@ test('空闲 30 分钟：关闭旧 episode，写一条 L2 + thread', async () =>
   cleanup(dir);
 });
 
+test('resolved：兑现的事会关闭线程并下架旧事实', async () => {
+  const { store, dir } = tempStore();
+  const key = 'wechat:u:a';
+  const now = Date.now();
+  // 先发一条消息把 chat 建出来，再塞「欠语音」的旧事实和旧线程，模拟之前挂起的事
+  store.appendMessage(key, { role: 'user', name: '小海', uid: 'u1', text: '上次的事', ts: now - 1000 });
+  const chat = store.chatStore.chats.get(key);
+  const card = store.chatStore.ensurePerson(chat, 'u1', '小海');
+  personCard.addPreference(card, { text: '欠语音还没补', confidence: 0.8, source: 'm0' }, { chatId: chat.chatId, now });
+  personCard.addThread(card, { text: '欠语音还没补' }, { chatId: chat.chatId, now });
+  store.chatStore.saveCard(chat, card);
+
+  const resolvingLlm = {
+    isMock: false,
+    async complete() {
+      return JSON.stringify({
+        summary: '小海把之前欠的语音补发了，这事翻篇了。',
+        facts: [], traits: [], events: [],
+        threads: [],
+        resolved: [{ uid: 'u1', text: '欠语音补发了' }],
+      });
+    },
+  };
+  store.appendMessage(key, { role: 'user', name: '小海', uid: 'u1', text: '语音我补发给你啦', ts: now });
+  const first = await store.closeEpisode(key, { llm: resolvingLlm, now: now + 10, reason: 'manual' });
+  assert.equal(first.closed, true);
+  assert.equal(personCard.openThreads(card).length, 0, '兑现后旧线程要关掉');
+  assert.ok(!personCard.activePreferences(card).some((p) => p.text.includes('语音')), '旧「欠语音」事实要下架');
+  store.close();
+  cleanup(dir);
+});
+
 test('L2 幂等：同一个 episode 关两次，事件只写一条', async () => {
   const { store, dir } = tempStore();
   const key = 'wechat:u:a';

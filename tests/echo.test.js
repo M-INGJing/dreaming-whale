@@ -12,6 +12,7 @@ const path = require('node:path');
 const { Bot } = require('../src/pipeline/chat');
 const { Store } = require('../src/memory/store');
 const { DEFAULT_CONFIG } = require('../src/infra/config');
+const { isEcho, topicTokens, reasksTopic } = require('../src/core/echo');
 
 function makeBot({ replies }) {
   const config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -97,5 +98,42 @@ test('私聊也不会复读', async () => {
     senderId: 'wxid_p1', senderName: '老王', text: '在吗',
   });
   assert.notEqual(r.reply, '在吗');
+  cleanup();
+});
+
+/* ------------------------------ 话题级去重（P1-2） ------------------------------ */
+
+test('topicTokens：只留内容字，虚词碎片不进主题', () => {
+  const tokens = topicTokens('你昨天说的语音补了吗');
+  assert.ok(tokens.includes('语音'), '「语音」是内容主题，应被抽出');
+  assert.ok(!tokens.includes('了吗'), '「了吗」是虚词碎片，不该当主题');
+  assert.deepEqual(topicTokens('的了吗'), [], '纯虚词句抽不出任何主题');
+});
+
+test('reasksTopic：换说法再问刚聊过的话题 → 判重', () => {
+  assert.equal(reasksTopic('语音的事你想好了吗', ['你昨天说的语音补了吗'], ['嗯']), true);
+});
+
+test('reasksTopic：对方这轮先提起 → 不算她主动重提', () => {
+  assert.equal(reasksTopic('语音补了吗', ['你昨天说的语音补了吗'], ['语音我补了']), false);
+});
+
+test('reasksTopic：陈述式接续不是追问，不拦', () => {
+  assert.equal(reasksTopic('语音补了就好，翻篇啦', ['你昨天说的语音补了吗'], ['嗯']), false);
+});
+
+test('reasksTopic：她没提过的话题不拦', () => {
+  assert.equal(reasksTopic('你吃了吗', [], ['嗯']), false);
+});
+
+test('换说法重复追问 → 会重写成不重复的话', async () => {
+  const { bot, calls, cleanup } = makeBot({ replies: ['语音的事你补了吗', '语音补了吗', '嗯行吧，翻篇'] });
+  // 第一次她自己引入「语音」话题（用户没提，own 里从此有了「语音」）
+  await bot.handle(g('@鲸鲸 在吗'));
+  // 用户只回「嗯」没接「语音」，她却换说法又问「语音补了吗」→ 判重并重写
+  const r = await bot.handle(g('@鲸鲸 嗯'));
+  assert.notEqual(r.reply, '语音补了吗');
+  assert.match(r.reply, /翻篇/);
+  assert.ok(calls.some((c) => /重写要求/.test(c)), '要触发一次带重写要求的重写');
   cleanup();
 });

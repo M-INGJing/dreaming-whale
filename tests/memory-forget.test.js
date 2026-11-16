@@ -87,6 +87,24 @@ test('threads：开/关，上限 10，最久没提的先关', () => {
   assert.ok(!personCard.openThreads(card).some((t) => t.text === '未完成话题11'));
 });
 
+test('supersedeFact：已兑现的事把旧偏好软失效，不影响别的', () => {
+  const card = newCard();
+  personCard.addPreference(card, { text: '欠语音还没补', confidence: 0.8, source: 'm1' }, { chatId: card.chatId, now: NOW });
+  personCard.addPreference(card, { text: '喜欢猫', confidence: 0.8, source: 'm2' }, { chatId: card.chatId, now: NOW });
+  const n = personCard.supersedeFact(card, '欠语音', NOW + 1);
+  assert.equal(n, 1);
+  const active = personCard.activePreferences(card);
+  assert.ok(!active.some((p) => p.text.includes('语音')), '兑现后旧「欠语音」不能再当活跃事实');
+  assert.ok(active.some((p) => p.text === '喜欢猫'), '不相关的偏好不受影响');
+  assert.ok(card.preferences.some((p) => p.text.includes('语音') && p.superseded), '软失效标记保留，方便审计');
+});
+
+test('topicMatch：换说法/带插入字也能对齐到同一件事', () => {
+  assert.ok(personCard.topicMatch('欠语音还没补', '欠语音补发了'), '带插入字 + 换词仍算同一件事');
+  assert.ok(personCard.topicMatch('要不要辞职', '决定不辞职了'), '共享「辞职」主题词');
+  assert.ok(!personCard.topicMatch('欠语音还没补', '周末爬哪座山'), '不同主题不误匹配');
+});
+
 test('忘记：软删除 fact/event/thread，不物理删文件', () => {
   const card = newCard();
   personCard.addPreference(card, { text: '怕黑', confidence: 0.8 }, { chatId: card.chatId, now: NOW });

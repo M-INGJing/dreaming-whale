@@ -38,7 +38,7 @@ const { sanitizeForModel, nameMatches, clampInt } = require('../core/text');
 const trigger = require('../core/trigger');
 const { INSULT_RE, INSULT_LOOSE_RE, namedHerIn } = require('../core/trigger');
 const context = require('../core/context');
-const { isEcho } = require('../core/echo');
+const { isEcho, reasksTopic } = require('../core/echo');
 const { extractMentionNames } = require('../core/mentions');
 const { COMMAND_HELP, extractCommand } = require('../core/commands');
 const { cannedReply, dismissReply } = require('./stages/canned');
@@ -2067,12 +2067,15 @@ class Bot {
         decision.ownList = ownList;
         const repeatsSomeone = heardList.some((h) => isEcho(text, h));
         const repeatsSelf = ownList.some((h) => isEcho(text, h));
-        if (repeatsSomeone || repeatsSelf) {
-          const why = repeatsSelf ? '在重复你自己刚才说过的话' : '在复读别人的话';
+        const reasks = reasksTopic(text, ownList, heardList);
+        if (repeatsSomeone || repeatsSelf || reasks) {
+          const why = reasks
+            ? '又在追问刚聊过、对方还没接的话茬'
+            : (repeatsSelf ? '在重复你自己刚才说过的话' : '在复读别人的话');
           this.logger && this.logger.warn('回复' + why + '，重写一次：' + String(text).slice(0, 30));
           try {
             const retry = await this.llm.complete({
-              system: decision.system + '\n\n【重写要求】你刚才的回答' + why + '，不合格。现在重写：换一个说法，给出新的信息或明确态度；不能出现对方原句，也不能重复你上面说过的话。',
+              system: decision.system + '\n\n【重写要求】你刚才的回答' + why + '，不合格。现在重写：换一个说法，给出新的信息或明确态度；不能出现对方原句，也不能重复你上面说过的话，更不能把刚问过、对方没接的话茬再问一遍。',
               turns: decision.turns,
               signal,
               webSearch: true,
@@ -2080,7 +2083,8 @@ class Bot {
             // 只有重写合格才采用（M18）：以前不合格时 `else text = retry || text` 照样把
             // 还在复读的 retry 发出去，这道校验形同虚设；不合格就保留原文，finalize 里
             // 还有第二道 echo 兜底。
-            if (retry && !heardList.some((h) => isEcho(retry, h)) && !ownList.some((h) => isEcho(retry, h))) text = retry;
+            if (retry && !heardList.some((h) => isEcho(retry, h)) && !ownList.some((h) => isEcho(retry, h))
+              && !reasksTopic(retry, ownList, heardList)) text = retry;
           } catch { /* 重写失败就沿用原文，后面还有兜底 */ }
         }
       }

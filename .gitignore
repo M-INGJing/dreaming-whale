@@ -72,3 +72,7 @@ runtime/
 /whale-girl-backup-*/
 /RESTORE.md
 /MANIFEST.txt
+
+# 用户提供的私聊问题分析文档：含真实 wxid / 昵称等身份信息，只留本机；
+# 已另存脱敏版 docs/私聊重复追问-修复方案.md 入库
+/docs/鲸鲸私聊问题分析-2026-11-15.md

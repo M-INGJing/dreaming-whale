@@ -202,6 +202,12 @@ async function closeEpisode({ chat, chatStore, llm = null, logger = null, now = 
         }, { chatId: chat.chatId, now });
         writtenEvents += 1;
       }
+      // 「已解决 / 已兑现」：把之前挂着的事关掉，旧事实下架，避免下轮还当「没聊完」追问
+      const personResolved = (extracted.resolved || []).filter((r) => !r.uid || r.uid === speaker.uid);
+      for (const r of personResolved) {
+        personCard.closeThread(card, r.text, now);
+        personCard.supersedeFact(card, r.text, now);
+      }
       chatStore.saveCard(chat, card);
     }
 
