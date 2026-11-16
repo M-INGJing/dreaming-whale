@@ -67,8 +67,8 @@ def parse_bg_send(wechat_cfg):
         "charGap": _num("charGapMs", 40, 20, 80) / 1000.0,
         # 发完回读输入框是否清空；关掉能省 ~0.5s，但少了「真发出去」的证据
         "verify": as_bool(raw.get("verify", True), True),
-        # 后台通道失败时要不要退回会抢前台的旧通道
-        "fallback": as_bool(raw.get("fallbackToForeground", True), True),
+        # 发送顺序是「先前台、失败再回退后台」；这里控制前台失败后要不要退回零焦点后台通道
+        "fallback": as_bool(raw.get("fallbackToBackground", True), True),
         # GBK 编不了的字符（emoji 等）是跳过还是整条退回旧通道
         "strip": as_bool(raw.get("stripUnencodable", True), True),
         # 微信缩在托盘里（窗口隐藏）时，用「显示但不激活」把它拉出来 —— 不抢前台
