@@ -2,7 +2,7 @@
     "name": "whale-girl-bot",
     "version": "4.0.8",
     "private": false,
-    "description": "鲸鲸 —— 模块化重构版（CommonJS，零 npm 依赖）",
+    "description": "鲸鲸 Whale Girl —— DeepSeek 微信聊天机器人（B站养鱼/表情包/语音/能力系统，零 npm 依赖）",
     "main": "server.js",
     "type": "commonjs",
     "scripts": {
@@ -26,13 +26,24 @@
         "chatbot",
         "wechat",
         "wechat-bot",
+        "wechat-robot",
         "bilibili",
-        "llm"
+        "bilibili-bot",
+        "llm",
+        "ai-companion",
+        "sticker",
+        "voice",
+        "wpf",
+        "零依赖"
     ],
     "license": "AGPL-3.0-only",
-    "author": "",
+    "author": "M-INGJing (fork); original by Banan1cee/whale_girl contributors",
+    "homepage": "https://github.com/M-INGJing/dreaming-whale#readme",
+    "bugs": {
+        "url": "https://github.com/M-INGJing/dreaming-whale/issues"
+    },
     "repository": {
         "type": "git",
-        "url": ""
+        "url": "https://github.com/M-INGJing/dreaming-whale.git"
     }
 }

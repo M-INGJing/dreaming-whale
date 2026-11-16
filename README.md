@@ -1,271 +1,137 @@
-[English](README.md) | [中文](README.zh-CN.md)
+# 🐋 鲸鲸 Whale Girl · dreaming-whale
 
-# 🐋 Whale Girl — a DeepSeek-powered WeChat companion bot
+> **DeepSeek 微信聊天机器人 / WeChat AI companion bot**：能自动回微信私聊和群聊，会逛 B 站、写日记、发表情包、发语音，还带一个 WPF 启动器。
+> 内核 **CommonJS、零 npm 运行时依赖**，支持任意 OpenAI 兼容模型（DeepSeek / 智谱 GLM / Qwen / 本地 Ollama…）。
 
-[![GitHub release](https://img.shields.io/github/v/release/Banan1cee/whale_girl)](https://github.com/Banan1cee/whale_girl/releases/latest)
+[![Version](https://img.shields.io/badge/version-4.0.8-blue)](package.json)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-339933)](https://nodejs.org/)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)
-[![GitHub stars](https://img.shields.io/github/stars/Banan1cee/whale_girl)](https://github.com/Banan1cee/whale_girl/stargazers)
-
-> **Just want to run it?** Grab the latest `whale-girl-*-setup.exe` (about 168 MB) from
-> [Releases](https://github.com/Banan1cee/whale_girl/releases/latest).
-> The installer ships Node, Python 3.12 and the .NET 10 desktop runtime, so **nothing has to be downloaded afterwards**.
-> Installation itself does not trigger UAC — only a machine without .NET 10 gets one extra elevation prompt.
-> When it finishes, a desktop shortcut opens the launcher.
->
-> ## Updating without losing memory
->
-> **Download the new installer and install it over the old version.** `data\` (chat memory, keys, nicknames)
-> and `config.json` (owner list, token) are left untouched, while leftovers from older versions (`personas\`,
-> `resources\`, the old `runtime\vb-cable` location) are cleaned up so the install does not keep growing.
->
-> Prefer a manual backup: `node scripts\memory-tool.js export <file>` writes a JSON export and
-> `restore <file>` puts it back (the launcher's Diagnostics page uses the same commands).
->
-> **A 3.x `data\store.json` is detected and converted to the 4.0 format automatically**: just merge the old
-> `data\` into the new install and start. The launcher reports "memory imported and converted" once and keeps
-> the original under `data\memory\legacy\`. You can repeat the conversion any time from
-> Settings → Advanced → Legacy memory; clicking twice does not import twice.
->
-> ---
->
-> `Code → Download ZIP` contains the source tree only (no runtimes, keys or chat history). Normal use should install from Releases; build and development instructions live in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-A companion bot that actually talks: **automatic replies in WeChat groups, Bilibili/Weibo trending topics, and live web lookups**. Settings and diagnostics live in the launcher.
-
-The persona is a blue-haired whale girl — short messages, real moods, sweet one moment and savage the next. She talks to any OpenAI-compatible model (DeepSeek / Zhipu GLM / Qwen / local Ollama…), and the kernel has zero npm dependencies.
+[![GitHub](https://img.shields.io/badge/GitHub-M--INGJing%2Fdreaming--whale-181717)](https://github.com/M-INGJing/dreaming-whale)
 
 ---
 
-## Experimental stickers
+## ⚠️ 仓库来源与版本（重要）
 
-The package includes 27 Whale Girl preset PNGs (9 each in tsundere, angry and happy). They are imported into your library in the background the first time stickers are enabled. Existing images are never overwritten, and deleting a preset does not make it reappear after a restart. The master switch remains off by default.
+| 项 | 值 |
+|---|---|
+| **本仓库** | https://github.com/M-INGJing/dreaming-whale （下称“本 fork”） |
+| **上游项目** | https://github.com/Banan1cee/whale_girl （原作者仓库） |
+| **当前版本** | **4.0.8**（见 `package.json` / `CHANGELOG.md`） |
+| **基于** | 上游 `Banan1cee/whale_girl` **4.0.8** 的模块化重构版 |
+| **上游最新** | 上游已到 `4.1.6.1` / `4.2.0`，**仅作为参考，本 fork 尚未合并** |
+| **发布/Issue/PR** | 全部走 **本 fork**；上游只读参考，不向其推送、不提 PR |
 
-Turn the master switch on in the launcher's **Stickers** page (off by default). The category is chosen by the model, which writes `[[sticker:category]]` at the end of a reply: the marker is stripped before the user sees anything, and if the marker is missing, the category does not exist or that category has no images, **nothing is sent** — the bot never guesses a mood and never picks one at random. Three built-in categories (tsundere / angry / happy) plus any custom ones you add; manage categories, upload and delete images, or open the folder from the launcher. GIF, PNG, JPEG and WebP are supported (4 MB per file). Uploading only stores the original file: no WeChat message is sent and GIFs are not re-encoded.
+> 本 fork 在上游 4.0.8 的基础上加入了 B 站养鱼增强（日记 / 分享卡片 / 抽帧看画面）、能力系统、表情包收藏、语音回复等改动。
+> 如果你要找原作者版本、安装包或最新发布，请访问上游：<https://github.com/Banan1cee/whale_girl>。
+> **本仓库不发布官方安装包**，以源码运行 / 自行构建为主。
 
-Custom categories are matched by name, so the more descriptive the name, the better (for example "passive-aggressive" or "grievance"): the model picks from categories that actually contain images, and never force-fits an uninformative name. Categories without images are not shown to the model at all.
-
-The Stickers page can also set the frequency (0–100%) and the "send one even without a marker" option, which map to `sticker.demandChance` (default 0.7) and `sticker.ensureSend` (default off) in `config.json`. `demandChance` decides whether this turn appends a reminder to include a sticker: 0 = rely on the model, 1 = remind every turn — but with only that option a value of 1.0 still does not guarantee a send, because the model may still omit the marker. With `ensureSend` on, a turn that hits the reminder gets a sticker anyway, chosen from the reply's tone (angry / tsundere / happy, falling back to happy), so **1.0 plus ensure-send is roughly "one sticker per turn"**. Serious moments still suppress it (the recipient is upset, asking for help, or discussing something real); the serious window ends after 15 minutes, four ordinary messages, or a "never mind" / "haha". An explicit request is still honoured 100% of the time.
-
-The optional **Queue test send** performs real WeChat actions — **queued does not mean delivered**. The bridge may briefly switch to the target chat and restore it afterwards; clear the input box first. When evidence is insufficient it skips instead of pressing Enter blindly, and it never retries automatically. If the result says "unconfirmed", do not press send again; if a draft attachment appears, clear it manually — your drafts are never deleted for you. One pending job per chat at a time, no cooldown after confirmation, and jobs older than 90 seconds expire instead of being replayed.
-
-A send counts as "confirmed" only when a new outgoing image record appears in the database; a database error or no new record is "unconfirmed", never success. Turning the switch off cannot recall a message that has already been sent, and restarting the service never replays old jobs.
-
-See [CHANGELOG.md](CHANGELOG.md) for the change history.
-
-## Voice replies (optional)
-
-The launcher's **Voice send** page lets her reply with voice as well as text. BreezeBlue, MiniMax and SiliconFlow are supported; each provider keeps its own encrypted key, model, voice and style, so switching providers never overwrites another provider's choices. MiniMax voices can be searched by name or language, and SiliconFlow switches and remembers voices per model.
-
-Sending requires the **VB-CABLE** virtual audio device. The installer only ships the official driver installer; follow the page to install it and pick the device the first time. If synthesis times out or recording never starts, she falls back to text; an unconfirmed send is never retried automatically. Voice quotas and billing are controlled by each provider account.
-
-## Features
-
-- **One entry point** — the launcher (WPF + .NET 10) is the only GUI; there is no browser console, and `8787` only serves the HTTP API.
-- **WeChat group replies** — she answers @-mentions and her name, keeps the thread going while it lives, and goes quiet when the topic dies. She fires back when insulted by name, but never joins other people's arguments.
-- **Human-like pacing** — one reply is split into 2–3 short bubbles with no trailing tildes or full stops; if someone sends a bare `？`, she answers with a `？` too.
-- **Memory** — facts people state about themselves in DMs are recorded, older group chats are compressed into a summary, and she stays silent when image or sticker recognition fails.
-- **No parroting** — if the model repeats itself (identical text, text plus a question mark, "no, *you* are…"), the reply is rewritten once.
-- **Slang** — `kskbl` → `zdjd`, `xswl` → she echoes it back; the lexicon is `assets/abbrev.txt`.
-- **Clapbacks** — when she or her owner is insulted she fires back with a 9-tier line library (`assets/clapback.txt`, extensible). Soft replies get replaced, but she never touches sex, family, discrimination or real-world threats.
-- **Little helper** — in a DM from her owner she reports her own WeChat ID; after the owner grants "you may roast me" she may roast them in three sentences.
-- **Voice** — incoming voice messages are transcribed before she replies; with **Voice send** enabled she can also reply by voice through BreezeBlue, MiniMax or SiliconFlow.
-- **Web access** — the model decides whether a lookup is needed; Bing with a 360 fallback, Bilibili/Weibo trending (routed per site), the Toutiao hot list and link-body extraction, all under a global timeout, with the current date in the prompt.
-- **Group management** — mute and unmute, switch model, change tone, clear memory, and an automatic "good night" on low battery.
-- **Stop everything** — `scripts\stop-all.ps1` or the launcher's **Stop** button stops kernel and bridge and writes a pause marker.
-- **WeChat bridge** — `examples/wechatauto_bridge.py`: read-only database access plus window automation, never injecting into WeChat.
-- **Zero npm dependencies** — no `npm install`; release bundles carry the runtime, while this repository contains the source tree.
+**搜索关键词**：鲸鲸、Whale Girl、DeepSeek 微信机器人、微信自动回复、微信群机器人、微信 AI 伴侣、B 站养鱼、B站机器人、表情包机器人、微信语音回复、WPF 启动器、Node.js 微信机器人、WeChat bot、WeChat AI companion、DeepSeek chatbot、Bilibili bot、zero dependencies、AGPL-3.0。
 
 ---
 
-## Install (Windows, installer)
+## ✨ 功能
 
-> This repository contains **source only, without `runtime\`**. To use the bot, download `whale-girl-*-setup.exe` from [Releases](https://github.com/Banan1cee/whale_girl/releases/latest).
-> **Install to an ASCII-only path** (for example `D:\whale-girl-4.0`). Inside a path containing Chinese characters, WeChat automation fails with a continuous "access denied" error; the reason is explained under "WeChat bridge" below.
-
-1. Run `whale-girl-4.0.7-setup.exe` and click Next through the wizard (no administrator rights needed).
-2. When it finishes, open the **Whale Girl** shortcut on the desktop and press **Start** in the top-right corner — the launcher brings up the kernel and the bridge (`8787` is used only by the launcher and the bridge; there is no web UI).
-3. Once the **Status** page shows both kernel and bridge as running, you are good to go.
-
-The installer bundles a **Node.js runtime** (`runtime\node.exe`), a **Python runtime** (`runtime\python`) and the **.NET 10 desktop runtime installer**; none of them need to be installed by you. The launcher prefers the bundled runtimes and only falls back to `PATH`. If the machine already has .NET 10, the bundled 57 MB installer deletes itself after installation, leaving no garbage behind.
-
-The same applies to the bridge: pressing **Start** launches it with the bundled Python, which already has `wechatauto`, `pywin32`, `uiautomation`, `Pillow`, `cryptography`, `pysilk` and friends installed.
-
-The only things you must supply: **a logged-in secondary WeChat account** and **one model API key** (DeepSeek / Zhipu / Qwen, your pick). Supported providers: `deepseek` / `zhipu` / `siliconflow` / `qwen` / `doubao` (Volcengine Ark) / `opencode` / `ollama` (local or self-hosted, editable URL/model) / `custom` (any OpenAI-compatible endpoint).
-
-## Updating to a new version
-
-The launcher no longer checks for updates automatically. To upgrade, download the latest `whale-girl-x.y.z-setup.exe` from GitHub Releases and install it over the old version:
-
-- Running processes are stopped before the overwrite, so it never fails on "access denied".
-- The installation directory is reused; `data\` (chat memory) and `config.json` (keys) are left untouched.
-
-## When the launcher won't open
-
-Use the launcher's **Diagnostics** page first. Command-line recovery steps are documented in [docs/维护手册.md](docs/维护手册.md); they are not part of normal installation.
+| 模块 | 说明 |
+|---|---|
+| 💬 **微信聊天** | 私聊 / 群聊自动回复，支持 @、连续消息合并、引用、防复读、情绪与关系记忆 |
+| 🐟 **B 站养鱼** | 定时“醒着”刷推荐、读视频资料（标题/简介/字幕/热评）、写当天日记、每周小结；对高分视频用 ffmpeg 抽九宫格 + 视觉模型“看画面” |
+| 📤 **B 站分享** | 把值得看的视频分享到主人私聊 / 白名单群；分享前先发“封面卡片 + 短链接” |
+| 🧠 **能力系统** | 她能在聊天里自己判断要不要“逛 B 站 / 刷视频并分享 / 写日记”，用 `[[cap:id]]` 触发后台执行 |
+| 🖼️ **表情包** | 收藏群友表情包（去重、自动分类、人工确认），按语气自动发表情 |
+| 🎙️ **语音回复** | 可选 MiniMax / 硅基流动 / BreezeBlue 等 TTS，语音前自动清洗颜文字和 emoji |
+| 🐚 **启动器** | WPF 启动器：状态、人设、模型 Key、B 站、能力、表情包、语音、诊断；不提供网页 UI |
+| 📕 **小红书技能（实验）** | 命中“搜小红书 / 看第 N 条 / 发小红书”时调用本机 `xiaohongshu-mcp`，发布走“草稿 → 确认 → 发送” |
+| 🔌 **多模型** | DeepSeek、智谱 GLM、Qwen、Kimi、Ollama 等 OpenAI 兼容接口，零 npm 依赖 |
 
 ---
 
-## WeChat bridge (Windows)
+## 🚀 快速开始（源码）
 
-Requirements: Windows, a logged-in WeChat 4.x, administrator rights. Double-click `WhaleLauncher.exe` and press **Start**; kernel and bridge come up together.
+**环境**：Windows 10/11、Node.js ≥ 18、Python 3.12（桥接）、.NET 10 SDK 仅构建启动器时需要。
 
-Details (UIA elevation, multiple accounts, ASCII-only paths, error codes) are in the WeChat integration guide under [`docs/`](docs/).
+```powershell
+git clone https://github.com/M-INGJing/dreaming-whale.git
+cd dreaming-whale
 
-### Stop everything (`scripts\stop-all.ps1`)
+# 1) 环境自检
+node server.js --doctor
 
-Close the launcher first, then run `powershell -File scripts\stop-all.ps1`. It stops the Whale Girl kernel (whatever holds port 8787) and the WeChat bridge (`wechatauto_bridge.py`).
-
-The script does **not** close the launcher window; close it yourself first. It writes `data\PAUSED` so nothing restarts automatically, saves the latest memory before killing, scans three times because a child process may spawn while its parent is being killed, and finally prints a green "clean" line or the list of leftover PIDs.
-
-To resume: open `WhaleLauncher.exe` and press **Start** (the launcher clears `PAUSED`).
-
----
-
-## Who can be an admin
-
-The project hard-codes nobody's WeChat ID — the deployer decides:
-
-```json
-"persona": {
-  "master": { "names": ["your-nickname"], "wxids": ["wxid_xxx"] }
-},
-"admin": {
-  "spell": "a passphrase only you know",
-  "minutes": 30,
-  "allowAll": false
-}
+# 2) 启动内核（HTTP API：127.0.0.1:8787）
+node server.js
 ```
 
-- `master.names` / `master.wxids` — everyone listed here is an owner (multiple entries allowed).
-- `admin.spell` — sending this passphrase in a DM grants 30 minutes of admin rights; leave it empty to disable.
-- `admin.allowAll: true` — **anyone** can use admin commands without the passphrase. Fine for a small private group, dangerous in public ones.
+微信收发需要桥接：
 
-### Admin commands (DM the bot)
-
-Admin commands are sent in private chat. The full list (status, tone, length, mute, switch model, reset memory…) is in the settings reference under [`docs/`](docs/).
-
-### How context is assembled
-
-- Group history is fed to the model as **events**: every line keeps its speaker, time and @ target, so several people's messages are not squashed into one, and someone else's "you" is never mistaken for an address to Whale Girl.
-- If a message @-mentions somebody else and then says "you", she does not jump in; if it @-mentions both her and another person, that person is recorded as a mention.
-- DM context is 100 messages by default, group context 60 (`chat.historyTurns` / `chat.groupHistoryTurns`, capped at 120/100). `memory.maxMessages` must be at least the largest window, otherwise messages cannot be stored. The "messages" count in the UI means individual messages, not question/answer turns.
-
-### Persona presets (one file per version)
-
-`assets/personas/` holds one file per persona version; upgrades add files and never overwrite old ones. Import them from the bottom of the launcher's **Persona** page. Conventions and privacy rules are in [assets/personas/README.md](assets/personas/README.md).
-
-## Pause and resume
-
-Press **Stop** in the launcher, then close it. If you need to clean up leftovers, run `scripts\stop-all.ps1`: kernel and bridge stop without sending anything and `data/PAUSED` is written. Open `WhaleLauncher.exe` and press **Start** to resume — it clears the pause marker.
-
-## Configuration
-
-The installed edition is configured in the launcher's **Settings** page. Advanced users can edit `config.json` directly; `config.example.json` is the template and `config.json` is git-ignored.
-
-| Field | Meaning |
-| --- | --- |
-| `provider` / `deepseek.apiKey` | model provider and key |
-| `persona.master.names` / `wxids` | who counts as the owner |
-| `gateway.wechat.inboundToken` | bridge token — change it |
-| `group.requireAt` | must a group message @ the bot first? |
-| `chat.privateMaxChars` | reply length limit |
-
-Everything else is documented in the settings reference under [`docs/`](docs/).
-
----
-
-## Project structure
-
-```
-whale-girl/                        # same layout as the repository; runtime data is never committed
-├─ server.js                       # HTTP server + webhooks
-├─ WhaleLauncher.exe               # the only GUI entry point
-├─ package.json
-├─ requirements.txt
-├─ config.example.json
-├─ README.md                       # this file (English)
-├─ README.zh-CN.md                 # Chinese README
-├─ CHANGELOG.md
-├─ BUGS.md
-├─ CONTRIBUTING.md
-├─ AGENTS.md
-├─ LICENSE
-├─ .gitignore
-├─ .gitattributes
-├─ .github/                        # CI and releases
-├─ src/                            # kernel
-│  ├─ adapters/                    # outbound integrations
-│  ├─ core/                        # decision making and parsing
-│  ├─ http/                        # routes and security gates
-│  ├─ infra/                       # config and infrastructure
-│  ├─ llm/                         # model client
-│  ├─ memory/                      # memory and token budget
-│  ├─ persona/                     # persona
-│  ├─ pipeline/                    # message orchestration
-│  └─ services/                    # stateful services
-├─ bridge/                         # Python bridge
-├─ launcher/                       # launcher source
-├─ installer/                      # Inno Setup (bundled compiler)
-├─ scripts/                        # build/maintenance (tools/ holds UIA diagnostics)
-├─ assets/                         # persona presets and lexicons
-├─ examples/                       # bridge entry and media fallbacks
-├─ docs/                           # documentation
-├─ website/                        # static project site (no build step)
-├─ vendor/                         # pinned copy of wechatauto
-├─ tests/                          # tests
+```powershell
+python examples/wechatauto_bridge.py
 ```
 
-Not committed, generated at runtime: `data/` (keys, memory, logs), `runtime/` (bundled Node and Python), `artifacts/` (build output) and `config.json` (local configuration).
+或直接双击仓库根目录的 `WhaleLauncher.exe`，点右上角「启动」，启动器会一起拉起内核和桥接。首次使用建议先在演示模式跑通，再扫码/登录微信。
+
+构建启动器 EXE（改了 `launcher/` 后必须重发）：
+
+```powershell
+dotnet publish launcher/WhaleLauncher.csproj -c Release -o launcher/publish `
+  -p:PublishSingleFile=true -p:SelfContained=false
+Copy-Item launcher/publish/WhaleLauncher.exe .\WhaleLauncher.exe -Force
+```
+
+详细步骤（装 SDK、常见错误）见 [docs/构建启动器EXE.md](docs/构建启动器EXE.md)。
 
 ---
 
-## Development
+## 📁 目录结构
 
-Development, tests and build instructions are in [CONTRIBUTING.md](CONTRIBUTING.md). Normal user setup is the installer above.
+```
+src/           内核（core / pipeline / persona / memory / llm / services / adapters / http / infra）
+bridge/        Python 微信桥接（收发、UIA/后台发送、表情包、语音、B 站 outbox）
+launcher/      WPF 启动器（.NET 10，产物 WhaleLauncher.exe）
+tests/         Node / Python 回归测试
+docs/          设计与使用文档
+scripts/       自检、发布、打包、隐私扫描
+data/          运行时数据（聊天记忆、日记、表情包；不入库）
+```
 
 ---
 
-## Security and compliance
+## 📚 文档
 
-- The server binds to `127.0.0.1:8787` by default — **never expose it to the internet** (there is no authentication).
-- `data/` and `config.json` are git-ignored. **Never commit API keys or chat history.**
-- The WeChat bridge is UI automation: it does not patch the client, inject code or read process memory, but it **may still violate WeChat's terms of service**. Use it at your own risk.
-- Replies are generated by a large language model — be careful with `admin.allowAll` and auto-sharing in public groups.
+- [接入微信](docs/接入微信.md)
+- [微信消息后台发送（UIA / PostMessage / WM_CHAR）](docs/微信消息后台发送.md)
+- [B 站养鱼计划（含抽帧看画面）](docs/B站养鱼计划.md)
+- [能力扩展规范](docs/能力扩展规范.md)
+- [表情包收藏计划](docs/表情包收藏计划.md)
+- [记忆系统](docs/记忆系统.md) · [架构总览](docs/架构总览.md)
+- [构建启动器 EXE](docs/构建启动器EXE.md) · [打包与签名](docs/打包与签名.md)
+- [变更记录](CHANGELOG.md) · [协作规范](docs/协作规范.md)
 
 ---
 
-## Download
+## ✅ 测试与检查
 
-Only download installers from **GitHub Releases**: <https://github.com/Banan1cee/whale_girl/releases>.
-Checksums and verification commands are in [docs/DOWNLOAD.md](docs/DOWNLOAD.md).
+```powershell
+node server.js --doctor
+node scripts/check-layers.js
+node scripts/privacy-scan.js .
+node tests/bot.test.js            # 单文件跑；完整清单见 tests/
+```
 
-## Code signing policy
+---
 
-Current release builds are **not signed yet**, so Windows shows "Unknown publisher". Verify `SHA256SUMS.txt` from the release before installing.
-The signing policy is in [docs/CODE_SIGNING_POLICY.md](docs/CODE_SIGNING_POLICY.md); the privacy policy is in [PRIVACY.md](PRIVACY.md).
+## 📄 许可证与来源
 
-## Acknowledgements
+- 本项目沿用上游 **AGPL-3.0-only**，见 [LICENSE](LICENSE)。
+- 原始项目：**鲸鲸 / Whale Girl**，作者与贡献者见上游仓库 <https://github.com/Banan1cee/whale_girl>。
+- 本 fork 的修改与维护：<https://github.com/M-INGJing/dreaming-whale>。
+- 二次分发请保留本文件、`LICENSE` 与上游版权声明；AGPL 要求修改后的网络服务也提供源码。
 
-WeChat support in this project stands entirely on the shoulders of others. Special thanks to:
+## ⚠️ 免责声明
 
-- **Original character author: 上善无形** — the Whale Girl icon used in this project is a **derivative work** based on their original character. Rights in the original character remain with the original author; this project uses and credits it within the permitted scope. See [NOTICE.md](NOTICE.md).
-- **[wechatauto-replica](https://github.com/fanyuantaier/wechatauto-replica)** (v1.2.9, **Apache-2.0**, by fanyuantaier, [PyPI](https://pypi.org/project/wechatauto-replica/))
-  — a Windows WeChat 4.x automation library (a wxauto replica): SQLCipher database decryption plus hybrid UIA / coordinate-OCR sending.
-  The WeChat bridge (`examples/wechatauto_bridge.py`) is built directly on top of it.
-  - The source is vendored as a pinned copy in `vendor/wechatauto/` (including the original `dist-info/licenses/LICENSE`), with a manifest and checksums in `vendor/MANIFEST.sha256` and notes in `vendor/README.md`.
-  - The build copies it into `runtime/` only after verifying every file against the manifest and **never edits the upstream source**; behaviour changes belong in the build-time patch `scripts/prepare-sticker-runtime.py`, and runtime compatibility patches are applied from `examples/uia_compat.py`.
-  - The upstream README says "for personal study and automation research only". That is the author's wish, not a licence term; the actual rights come from Apache-2.0 (see below).
-- **[wxauto](https://github.com/cluic/wxauto)** (Apache-2.0) — the pioneer of Windows WeChat automation; `wechatauto-replica` is its 4.x replica and inherits its approach.
-- **[VB-CABLE](https://vb-audio.com/Cable/)** (VB-Audio, donationware) — the virtual audio cable used for voice sending; the installer only ships the official installer.
+微信自动化可能违反微信服务条款，存在账号被限制/封禁的风险；请仅用于个人学习与自用，不要用于骚扰、营销或批量操作。项目按“现状”提供，不对账号、数据或第三方服务损失负责。
 
-### Third-party licence and redistribution
+---
 
-- `wechatauto-replica` is licensed under **Apache-2.0**, which permits private and commercial use, modification and redistribution **provided the licence and copyright notices are kept, your changes are stated, and you do not imply endorsement by the upstream project**.
-- This repository satisfies those terms by shipping the licence text at `vendor/wechatauto/dist-info/licenses/LICENSE`, keeping the upstream source unmodified (patches happen at build/run time only, verified by `vendor/MANIFEST.sha256`), and crediting the project here and in `vendor/README.md`.
-- This project's original code, documentation and original assets are licensed under **AGPL-3.0-only** (see [LICENSE](LICENSE)). It is an OSI-approved open-source license: commercial use is allowed, but if you distribute a modified version or let users interact with it over a network, you must offer the complete corresponding source under AGPL-3.0. Third-party components keep their own licenses; see [NOTICE.md](NOTICE.md).
+## English summary
 
-## License
-
-**AGPL-3.0-only** — see [LICENSE](LICENSE). You may use, modify and distribute it, including commercially, under the AGPL. Network services based on modified versions must offer their source. Please keep the attribution described in [NOTICE.md](NOTICE.md).
+**Whale Girl (dreaming-whale fork)** is a DeepSeek-powered WeChat companion bot: automatic private/group replies, Bilibili “feeding” (watch videos, daily diary, weekly recap, frame extraction + vision), link-card style shares, sticker collection, voice replies, a WPF launcher, and an extensible capability system. Kernel is CommonJS with **zero npm runtime dependencies** and works with any OpenAI-compatible model. Version **4.0.8**, forked from <https://github.com/Banan1cee/whale_girl> (reference only; upstream has newer 4.1.x/4.2.x releases). This fork is maintained at <https://github.com/M-INGJing/dreaming-whale>. License: AGPL-3.0-only. Windows 10/11, Node.js ≥ 18, Python 3.12 for the bridge.
