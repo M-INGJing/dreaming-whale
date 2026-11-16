@@ -45,7 +45,9 @@ Copy-Item launcher/publish/WhaleLauncher.exe .\WhaleLauncher.exe -Force
 
 ## 4. 协作方式
 
-- 不直接 push `main`：改分支 → PR → CI 绿了再合并。
+- **远程边界（硬约定）**：本仓库是 `M-INGJing/dreaming-whale` 的 fork，代码**只合并/推送到 Mingjing 仓库**（`origin`）。`Banan1cee/whale_girl`（`upstream`）**只作为参考**：可以 `git fetch upstream` 只读查看差异，但不向其提交 PR、不推送、不把它的分支当成发布目标。
+- 参考上游后产生的合并/移植，提交只留在本 fork，不要回推到 upstream。
+- 不直接 push `main`：改分支 → PR → CI 绿了再合并（用户明确要求直接推 `origin/main` 时除外）。
 - 提交信息按 `docs/协作规范.md`（新增 / 改进 / 修复 / 其他 四段）。
 - 用户可见行为变了，`CHANGELOG.md` 补一段。
 
