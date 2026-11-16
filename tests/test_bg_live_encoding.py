@@ -4,6 +4,7 @@ import sys
 import unittest
 import tempfile
 import ast
+import threading
 import time
 from types import SimpleNamespace
 from contextlib import nullcontext
@@ -254,11 +255,20 @@ class LiveEncodingTests(unittest.TestCase):
 class DirtyDraftPipelineTests(unittest.TestCase):
     def test_bridge_does_not_fall_back_or_disable_chat_after_dirty_draft(self):
         # 只提取发送闭包，避开 main 的真实微信连接；执行的仍是实际桥接代码。
+        # 现行通道顺序：先前台（这里让它快速失败），失败后才回退后台；
+        # 后台报 DraftDirtyError 时必须整条放弃 —— 不能再换通道，也不能把会话标记失效。
         from bridge_ast import init, load_function
         for reason in ('input_dirty', 'residue_left', 'input_not_empty', 'content_mismatch'):
             with self.subTest(reason=reason):
                 draft_error = type('DraftDirtyError', (RuntimeError,), {})
-                fallback = Mock(side_effect=AssertionError('不能进入会抢前台的下一条发送通道'))
+
+                class FakeGui:
+                    def _get_uia(self):
+                        return None
+
+                    def send_msg(self, *a, **k):
+                        return False
+
                 env = dict(time=time, BG_SEND={'enabled': True},
                     BG_STATS=dict(disabled=False, cooldownUntil=0, tried=0),
                     _bg_hwnd=lambda: 4242, log=Mock(), log_error=Mock(),
@@ -266,14 +276,17 @@ class DirtyDraftPipelineTests(unittest.TestCase):
                     dead_chats=set(), fail_streak={}, account_send_allowed=lambda *a: True,
                     sticker_quarantine_allows=lambda *a: True, send_lock=nullcontext(),
                     _SendStateScope=lambda n: nullcontext(), STICKER_TEST_ON=False,
-                    SEND_STATE={}, gui=None, WeChatGUI=fallback)
+                    SEND_STATE={}, gui=FakeGui(), gui_lock=nullcontext(), WeChatGUI=Mock(),
+                    bind_gui_window=Mock(), normalize_window=Mock(), find_weixin_hwnd=lambda: 0,
+                    ACCOUNT={}, QUOTE_REPLY=False, KEYBOARD_FALLBACK=False,
+                    with_window_on_top=lambda fn: False, uia_send=Mock(return_value=False),
+                    keyboard_send=Mock(return_value=False), threading=threading)
                 module = SimpleNamespace(configure=Mock(), send=Mock(return_value=(False, reason)))
                 with patch.dict(sys.modules, {'bg_sender': module}):
                     init(env)
                     load_function('bg_send', env)
                     load_function('send_text', env)
                     self.assertFalse(env['send_text']('测试正文', '测试群'))
-                fallback.assert_not_called()
                 self.assertEqual(env['dead_chats'], set())
                 self.assertEqual(env['fail_streak'], {})
 

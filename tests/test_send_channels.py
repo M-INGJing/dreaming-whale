@@ -45,18 +45,18 @@ class SendTextPolicy(unittest.TestCase):
         fn = _function('send_text')
         self.assertNotIn(
             'STICKER_TEST_ON', _names(fn),
-            'send_text 不能再受表情包总开关影响：文字回复必须永远先试零焦点通道')
+            'send_text 不能再受表情包总开关影响：文字回复必须始终先试前台通道，再考虑后台兜底')
 
-    def test_background_channel_is_tried_before_window_on_top(self):
+    def test_foreground_channel_is_tried_before_background(self):
         fn = _function('send_text')
         lines = {}
         for n in ast.walk(fn):
             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
                 lines.setdefault(n.func.attr, n.lineno)
         self.assertIn('bg_send', lines, 'send_text 里必须还在调 bg_send')
-        self.assertIn('with_window_on_top', lines, 'send_text 里必须还有前台兜底')
-        self.assertLess(lines['bg_send'], lines['with_window_on_top'],
-                        '零焦点通道必须排在前台兜底之前')
+        self.assertIn('with_window_on_top', lines, 'send_text 里必须还有前台通道')
+        self.assertLess(lines['with_window_on_top'], lines['bg_send'],
+                        '前台通道必须排在零焦点后台兜底之前')
 
 
 class WindowOnTopPolicy(unittest.TestCase):

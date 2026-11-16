@@ -382,28 +382,9 @@ class SenderMixin:
                 return False
             t_start = G.time.time()
             allow_mark_dead = True
-            # 零焦点通道永远先试：它不抢前台，RDP 断连（没有前台）时也能发。
-            # 以前这里被 G.STICKER_TEST_ON 挡住，等同「开了表情包就连文字都不能后台发」。
-            if G.BG_SEND.get('enabled', True):
-                G.SEND_STATE['start'] = G.time.time()
-                try:
-                    if self.bg_send(text, chat_display_name, chat_username):
-                        self.fail_streak.pop(chat_username, None)
-                        G.log('发送成功（后台通道，%.1fs）→ %s' % (G.time.time() - t_start, chat_display_name))
-                        return True
-                except G.DraftDirtyError as e:
-                    allow_mark_dead = False
-                    G.log_error('发送暂停：%s' % e)
-                    return False
-                except G.ChatIdentityError as e:
-                    G.log_error('会话核对没通过，这条不发（%s）：%s' % (chat_display_name, e))
-                    return False
-                except Exception as e:
-                    G.log('后台通道异常，继续用旧通道：', repr(e))
-                if not G.BG_SEND.get('fallback', True):
-                    allow_mark_dead = False
-                    G.log_error('后台通道失败且已关闭前台兜底，这条不发：', chat_display_name)
-                    return False
+            # 通道优先级：先前台（UIA → 键盘 → OCR），全部失败后才回退零焦点后台通道。
+            # 前台通道有真实的焦点/按键确认，成功率和时序最稳；后台通道不抢前台，
+            # 只作为兜底（wechat.bgSend.enabled=false 可整体关掉后台兜底）。
             with self.gui_lock:
                 if self.gui is None:
                     G.log('初始化微信窗口驱动…（会抢一下焦点，约 5~10 秒）')
@@ -506,6 +487,25 @@ class SenderMixin:
                     G.log('兜底发送失败：%s' % resp)
                 except Exception as e:
                     G.log('兜底发送异常：%r' % e)
+            # 前台通道（UIA / 键盘 / OCR）都没发出去，才回退零焦点后台通道。
+            # 后台通道不抢前台，但依赖窗口消息与控件树，成功率不如前台，只作最后兜底。
+            # wechat.bgSend.fallbackToBackground=false 表示宁可不发也不退回后台。
+            if G.BG_SEND.get('enabled', True) and G.BG_SEND.get('fallback', True):
+                G.SEND_STATE['start'] = G.time.time()
+                try:
+                    if self.bg_send(text, chat_display_name, chat_username):
+                        self.fail_streak.pop(chat_username, None)
+                        G.log('发送成功（后台兜底通道，%.1fs）→ %s' % (G.time.time() - t_start, chat_display_name))
+                        return True
+                except G.DraftDirtyError as e:
+                    allow_mark_dead = False
+                    G.log_error('发送暂停：%s' % e)
+                    return False
+                except G.ChatIdentityError as e:
+                    G.log_error('会话核对没通过，这条不发（%s）：%s' % (chat_display_name, e))
+                    return False
+                except Exception as e:
+                    G.log('后台兜底通道异常：', repr(e))
             if chat_username and allow_mark_dead:
                 if G.time.time() - float(self.ACCOUNT.get('blockedAt') or 0) < 30:
                     G.log('账号窗口没确认，这条不算会话失效，先不发：', chat_display_name)

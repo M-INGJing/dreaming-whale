@@ -56,10 +56,17 @@ public static class VoiceSendEngine
  {
   var shortcut=RecordingShortcut.Parse(recordingHotkey);
   if(!IsWeChatForeground())throw new Exception("请保持微信目标聊天在前台");
-  var h=GetForegroundWindow();var chat=Chat(h);bool found=false;
+  var h=GetForegroundWindow();var chat=Chat(h);bool found=false,hinted=false;
+  var hits=new System.Collections.Generic.List<string>();
   foreach(AutomationElement b in AutomationElement.FromHandle(h).FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Button)))
-   if(shortcut.MatchesButton(b.Current.Name))found=true;
-  if(!found)throw new Exception("微信的发语音快捷键与配置不一致，请在两边设置为 "+shortcut.Label);
+  {
+   var name=b.Current.Name??"";
+   // 微信 4.x 的聊天区是自绘 UI：语音按钮在 UIA 里没有名字，整个聊天工具栏都不出现在
+   // Button 列表里。只有微信确实暴露了带「发语音/按住」字样的按钮（老版本行为）时才校验，
+   // 否则直接放行——否则新版微信永远报「快捷键与配置不一致」，一条语音都发不出去。
+   if(name.Contains("发语音")||name.Contains("按住")){hinted=true;hits.Add(name);if(shortcut.MatchesButton(name))found=true;}
+  }
+  if(hinted&&!found)throw new Exception("微信的发语音快捷键与配置不一致（检测到「"+string.Join("」「",hits)+"」），请在两边设置为 "+shortcut.Label);
   return new Target(h,chat);
  }
  static void Check(Target t){if(GetForegroundWindow()!=t.Hwnd||Chat(t.Hwnd)!=t.Chat)throw new Exception("窗口或会话已变化，取消本次录音");}

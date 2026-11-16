@@ -9,6 +9,13 @@
 - 异常分级：服务没起 / 没登录 / 验证码·风控 / 结果不确定（不自动重发），各有明确提示；缺图时提醒「至少要一张图」。
 - 总开关 `features.xhs`（默认关）+ `xhs.url/token/requireConfirm/maxPublishPerDay` 配置；见 `docs/小红书技能.md`。
 
+### 变更 · 发送通道改为「先前台、失败再回退后台」
+
+- `send_text` 的通道顺序从「零焦点后台优先」改成「前台优先」：UIA → 键盘 → OCR 都失败后，才回退零焦点后台通道兜底（原来后台通道排在最前，失败才回退前台）。
+- 配置 `wechat.bgSend.fallbackToForeground` 改名为 `fallbackToBackground`（默认 `true`）；设 `false` 表示前台失败时这条不发，绝不退回后台。
+- 日志里的成功标记区分「（后台兜底通道）」，方便判断这条是前台发的还是后台兜底发的。
+- 同步更新 `docs/接入微信.md`、`docs/微信消息后台发送.md`；`tests/test_send_channels.py` 的断言反过来：要求 `with_window_on_top` 出现在 `bg_send` 之前。
+
 ### 修复 · 私聊反复追问同一件事
 
 - 记忆渲染时，对「提过 3 次以上」的偏好 / 没聊完加「（已提 N 次）」信号，让模型看到计数后主动收手（以前 `mentions` 记了但从不交给模型）。
