@@ -27,6 +27,7 @@ const lunar = require('../core/lunar');
 const lottery = require('../core/lottery');
 const summarize = require('../core/summarize');
 const todoService = require('../services/todoService');
+const XhsService = require('../services/xhs').XhsService;
 const biliWatch = require('../services/biliWatch');
 const biliChat = require('../services/bili/chat');
 const capabilities = require('../services/capabilities');
@@ -362,6 +363,20 @@ class Bot {
       return { action: 'reply', key, msg, atMe, canned: `好，划掉了：${res.text}`, reason: 'todo_del' };
     }
     return null;
+  }
+
+  /**
+   * 上小红书：搜攻略 / 读笔记 / 发笔记。命令式触发，不依赖模型自觉。
+   * 「搜小红书 XX」「看第 N 条」「发小红书…」以及草稿的「发 / 不发」确认都走这里；
+   * 不在范围内的普通消息返回 null，交回正常流程。
+   */
+  async tryXhs({ clean, key, msg, atMe }) {
+    const text = String((clean && clean.text) || '').trim();
+    if (!text || text.length > 300) return null;
+    if (!this.xhsService) this.xhsService = new XhsService(this.config, { logger: this.logger });
+    const reply = await this.xhsService.handle(text, { chatId: msg.chatId || key });
+    if (!reply) return null;
+    return { action: 'reply', key, msg, atMe, canned: reply, reason: 'xhs' };
   }
 
   /** 规则解析不出来时，让模型把时间和事情抽成 JSON（模型不可用就放弃，不瞎猜） */
@@ -702,6 +717,8 @@ class Bot {
       if (lotteryReply) return lotteryReply;
       const todoReply = this.tryTodo({ clean, key, msg, atMe });
       if (todoReply) return todoReply;
+      const xhsReply = await this.tryXhs({ clean, key, msg, atMe });
+      if (xhsReply) return xhsReply;
     }
 
     // 对别人的话仍然旁听存档，但不触发命令、回怼或接话。

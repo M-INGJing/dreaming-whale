@@ -22,6 +22,14 @@ const REGISTRY = [
     experimental: true,
   },
   {
+    key: 'xhs',
+    path: 'features.xhs',
+    label: '小红书（搜攻略 / 读笔记 / 发笔记）',
+    desc: '默认关闭。开启后，说「搜小红书 XX / 看第 N 条 / 发小红书…」会调本机 xiaohongshu-mcp 服务去搜、读、发图文笔记；发布前回显草稿等确认。依赖额外的本机服务（xhs.url），关掉 = 完全回到旧行为，不联网。',
+    default: false,
+    experimental: true,
+  },
+  {
     key: 'stickers',
     path: 'features.stickers',
     label: '表情包（实验性）',

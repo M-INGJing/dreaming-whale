@@ -152,6 +152,14 @@
     "city": "",
     "timeoutMs": 8000
   },
+  "xhs": {
+    "_说明": "小红书（搜攻略/读笔记/发笔记）。总开关在 features.xhs（默认关）。url 指向本机 xiaohongshu-mcp 服务（可复用 dsh-xhs-whale 的修改版服务，默认 http://127.0.0.1:18060）；token 服务端开了鉴权才填；requireConfirm=true 发布前回显草稿等对方「发」确认；maxPublishPerDay 每日发布上限",
+    "url": "http://127.0.0.1:18060",
+    "token": "",
+    "timeoutMs": 120000,
+    "requireConfirm": true,
+    "maxPublishPerDay": 3
+  },
   "env": {
     "_说明": "提示词 <env> 块里的环境信息。location 手填可以精确到区（比如「厦门市思明区」）；留空就自动探测：优先 Windows 定位服务（不吃公网 IP，挂 VPN 也是本机位置，精度差时只报城市），拿不到才按出口 IP 猜（会写明「挂 VPN 可能不符」）。autoDetect=false 完全关掉探测，只用手填和 websearch.city。timezone 留空=系统时区。地点最多到区，不落盘",
     "location": "",
@@ -198,7 +206,8 @@
     "groupAddressGuard": true,
     "fightQuoteCheck": true,
     "mediaCleanup": true,
-    "memorySnapshot": true
+    "memorySnapshot": true,
+    "xhs": false
   },
   "sticker": {
     "_说明": "表情包（实验性）：总闸在 features.stickers。文件夹 data/stickers/<傲娇|炸毛|开心|自定义>/（中英文名都认）。发哪一类优先由模型在回复里用 [[sticker:分类名]] 决定，程序不猜情绪、不按概率配图；分类没有图或名字不对就不发。demandChance 决定“这一轮要不要在尾部提醒她带一张”（0=不提醒，0.7≈五到六成轮次，1=每轮提醒）；ensureSend=true 时，命中提醒的轮次即使模型没写标记也由程序补一张（1.0 + 开启才约等于每轮都发，难过/求助除外）。控制台可以上传/删除/预览缩略图。",

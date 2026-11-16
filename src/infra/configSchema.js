@@ -145,6 +145,12 @@ const FIELDS = {
   'env.timezone': { type: 'string', maxLen: 64 },
   // 自动探测所在地（Windows 定位服务优先）；false = 只用手填和 websearch.city
   'env.autoDetect': { type: 'bool' },
+  // ---- 小红书（总开关在 features.xhs）----
+  'xhs.url': { type: 'string', maxLen: 255 },
+  'xhs.token': { type: 'string', maxLen: 255 },
+  'xhs.timeoutMs': { type: 'int', min: 5000, max: 600000 },
+  'xhs.requireConfirm': { type: 'bool' },
+  'xhs.maxPublishPerDay': { type: 'int', min: 0, max: 100 },
   // ---- 提醒（规则字段和 care 对齐，配置独立）----
   'reminder.enabled': { type: 'bool' },
   'reminder.maxPerDay': { type: 'int', min: 0, max: 200 },

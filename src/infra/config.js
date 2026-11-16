@@ -258,11 +258,22 @@ const DEFAULT_CONFIG = {
     style: { enabled: true },
     write: { enabled: false },
   },
+  // 小红书：总开关在 features.xhs（默认关）。url 指向本机 xiaohongshu-mcp 服务（可复用 dsh-xhs-whale 的修改版服务），
+  // whale_girl 只做 HTTP 客户端 + 优雅降级，不打包浏览器自动化。
+  xhs: {
+    url: 'http://127.0.0.1:18060',
+    token: '',                    // 服务令牌（可选，服务端开了鉴权才填）
+    timeoutMs: 120000,
+    requireConfirm: true,         // 发布前回显草稿，等对方「发」确认
+    maxPublishPerDay: 3,          // 每日发布上限（风控）
+  },
   // 图片理解：默认智谱 GLM-4V-Flash（免费）
   features: {
     stickers: false,
     // B 站养鱼（只读）：开着才会在主人发 B 站链接时去读视频页/字幕/热评
     bili: false,
+    // 小红书（搜攻略 / 读笔记 / 发笔记）：开着才会调本机 xiaohongshu-mcp 服务
+    xhs: false,
     // 系统提示词静态化（前缀缓存）：关掉 = 回到「每轮都塞时间/心情/说话人」的旧行为
     staticSystem: true,
     // 环境信息注入（系统 / 时区 / 所在地）：关掉 = system 里没有 <env> 块
