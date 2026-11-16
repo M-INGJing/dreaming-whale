@@ -127,6 +127,16 @@ test('人物卡显示条数跟着 memory 预算涨（只加 token 不加条数�
   const blockBig = buildMemoryBlock({ card, events: evs, budget: big.memory ? planBudget(20000).memory : 900, caps: big });
   assert.ok(blockBig.length > blockSmall.length, '大预算下展示的内容应更多');
   assert.ok(estimateBudgetTokens(blockBig) <= planBudget(20000).memory + 40, '不能超过 memory 分片');
+
+test('「没聊完」不随预算放大：未兑现事项固定在基准条数，避免被顶到必现', () => {
+  const small = planBudget(5500).caps;
+  const mid = planBudget(10000).caps;
+  const big = planBudget(20000).caps;
+  assert.equal(small.threads, 4);
+  assert.equal(mid.threads, 4, '预算涨到 10,000，「没聊完」也不该跟着涨');
+  assert.equal(big.threads, 4, '预算顶格 20,000，「没聊完」仍固定在 4 条');
+  assert.ok(mid.prefs > small.prefs, '其它条数仍随预算放大');
+});
 });
 
 test('关系卡：开启后只从 recent 里切，其它分片不动', () => {

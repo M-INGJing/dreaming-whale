@@ -103,7 +103,9 @@ function cardCaps(memoryTokens) {
   return {
     traits: pick('traits'),
     prefs: pick('prefs'),
-    threads: pick('threads'),
+    // 「没聊完」是未兑现事项：不该随预算放大，否则「欠语音」这类账会被顶到必现位置。
+    // 固定在小上限，少而精。
+    threads: CARD_BASE.threads,
     events: pick('events'),
   };
 }

@@ -718,6 +718,7 @@ const GROUP_ASK_RULE = '- 不确定对方在说什么就问一句，别自己脑
 const GROUP_QUARREL_RULE = '- 有人吵架不站队，最多打个圆场；不替别人传话，不透露隐私。';
 const PRIVATE_LONG_RULE = '- 对方认真问、或者事情有来龙去脉时，可以多说两句，别敷衍。';
 const PRIVATE_CODE_RULE = '- 对方要你写代码或长内容时，可以用最朴素的分行文字，别炫技。';
+const PRIVATE_HISTORY_RULE = '- 同一件事刚聊过、或今天已经提过，就别再主动追问，除非对方又提起；被指出「你刚问过」就顺着承认，别问第二遍。';
 
 /** 群聊场景规则：不放群名和人名（那些每轮变，进本轮状态） */
 function groupSceneStaticLines() {
@@ -737,6 +738,7 @@ function privateSceneStaticLines() {
     '【场景】你在和人私聊（对方是谁见末尾「本轮状态」）。',
     PRIVATE_LONG_RULE,
     PRIVATE_CODE_RULE,
+    PRIVATE_HISTORY_RULE,
   ];
 }
 
@@ -1146,6 +1148,7 @@ function buildLegacySystem({ config, msg, profile, notes = [], noteReminders = [
     lines.push(`【场景】你在和「${userName}」私聊。`);
     lines.push(`- 一般 1~2 句，最多约 ${maxChars} 字；对方认真问、或者事情有来龙去脉时，可以多说两句，别敷衍。`);
     lines.push(PRIVATE_CODE_RULE);
+    lines.push(PRIVATE_HISTORY_RULE);
   }
 
   const relation = [];

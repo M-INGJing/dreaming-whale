@@ -48,6 +48,15 @@ function clip(textValue, max) {
   return chars.length > max ? chars.slice(0, max).join('') : s;
 }
 
+/**
+ * 「提过几次」交给模型：反复提过的账带个计数，让模型知道自己已经提过很多次、
+ * 别再主动问。mentions < 3 的不标，避免正常偏好也被打满备注。
+ */
+function mentionSignal(textValue, mentions) {
+  const n = Number(mentions) || 0;
+  return n >= 3 ? `${textValue}（已提 ${n} 次）` : textValue;
+}
+
 function listLine(items) {
   return (items || []).filter(Boolean).join('；');
 }
@@ -241,10 +250,10 @@ function buildMemoryBlock({
     .map((t) => clip(t.text, 40));
   const prefs = personCard.activePreferences(card)
     .sort((a, b) => (b.confidence || 0) - (a.confidence || 0))
-    .map((p) => clip(p.text, 40));
+    .map((p) => mentionSignal(clip(p.text, 40), p.mentions));
   const threads = personCard.openThreads(card)
     .sort((a, b) => (b.lastMentionedAt || 0) - (a.lastMentionedAt || 0))
-    .map((t) => clip(t.text, 40));
+    .map((t) => mentionSignal(clip(t.text, 40), t.mentions));
   const recentEvents = (events || []).slice(0, show.events);
 
   // 单条配额：一条记忆最多占「记忆预算」的 25%（≈225 token @ memory 900）。

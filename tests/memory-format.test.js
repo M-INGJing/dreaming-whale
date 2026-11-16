@@ -79,6 +79,21 @@ test('正常预算：三段都在，结尾声明单独一段且在最后', () =>
   assert.ok(estimateBudgetTokens(block) <= 900, '预算内：' + estimateBudgetTokens(block));
 });
 
+test('「提过多次」的偏好/没聊完带次数信号，让模型知道别再追问', () => {
+  const card = personCard.newCard({ chatId: CHAT, uid: 'user-test', name: '小海' });
+  const debt = personCard.addPreference(card, { text: '欠一条语音没补', confidence: 0.9 }, { chatId: CHAT });
+  debt.mentions = 101;
+  const mild = personCard.addPreference(card, { text: '爱吃辣', confidence: 0.8 }, { chatId: CHAT });
+  mild.mentions = 1;
+  const thread = personCard.addThread(card, { text: '欠语音还没补' }, { chatId: CHAT });
+  thread.mentions = 5;
+  const block = buildMemoryBlock({ card, events: [], summary: '', budget: 900 });
+  assert.ok(block.includes('欠一条语音没补（已提 101 次）'), '高次数要带信号：' + block);
+  assert.ok(block.includes('爱吃辣'), '低次数要有正文');
+  assert.ok(!block.includes('爱吃辣（'), '1 次不该加信号：' + block);
+  assert.ok(block.includes('欠语音还没补（已提 5 次）'), '没聊完也要带信号：' + block);
+});
+
 test('只超一点：只丢最旧事件，摘要和人物卡不动', () => {
   const card = makeCard();
   const summary = '第一句说猫。第二句说杭州！第三句说爬山？';
