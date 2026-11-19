@@ -238,6 +238,130 @@ def capture_preview_image(request, *, win, process, uia, locator, inp, grab, pau
                 pass
 
 
+def build_quote_request(db, quote_msg, chat_name, hwnd, pid):
+    """引用消息那一行的定位请求：目标是文字行（引用卡片就在这一行里）。"""
+    username, local_id = quote_msg.get('username'), quote_msg.get('local_id')
+    shard = quote_msg.get('shard')
+    chat_name = (chat_name or '').strip()
+    if not username or local_id is None or not chat_name:
+        return None
+    sequence, targets = [], []
+    for row in reversed(db.get_messages(username, limit=MAX_HISTORY)):
+        kind = {'文本': 'text', '图片': 'image'}.get(row.get('type'))
+        content = str(row.get('content') or '')
+        if kind is None and '<title>' in content:
+            import re as _re
+            import html as _html
+            _m = _re.search(r'<title>(.*?)</title>', content, _re.S)
+            if _m:
+                kind = 'text'
+                content = _html.unescape(_m.group(1)).strip()
+        if not kind:
+            continue
+        index = len(sequence)
+        anchor = content.strip()[:160] if kind == 'text' else ''
+        sequence.append({'kind': kind, 'content': anchor, 'local_id': index})
+        if row.get('local_id') == local_id and (not shard or row.get('shard') == shard):
+            targets.append((index, row))
+    if len(targets) != 1:
+        return None
+    index, row = targets[0]
+    self_id = getattr(db, 'wxid', None)
+    return {'hwnd': hwnd, 'pid': pid, 'chat': chat_name, 'sequence': sequence, 'target': index,
+            'is_self': bool(self_id and row.get('sender_username') == self_id),
+            'quote_click': True}
+
+
+def _find_row(locator, rows, sequence, target):
+    """按窗口偏移把目标行找出来（不限行类型：引用行是文字行）。"""
+    w = locator._align_window(rows, sequence, 0.95, 1)
+    if not w:
+        return None
+    j = target - w['offset']
+    return j if 0 <= j < len(rows) else None
+
+
+def capture_quote_preview(request, *, win, process, uia, locator, inp, grab, pause=time.sleep):
+    """点开引用卡片里的缩略图，微信会直接打开被引用图片的预览，再截这张预览。"""
+    main, pid = request['hwnd'], request['pid']
+    if (not win.IsWindow(main) or not win.IsWindowVisible(main) or win.IsIconic(main)
+            or process.GetWindowThreadProcessId(main)[1] != pid or win.GetForegroundWindow() != main):
+        raise PreviewUnavailable('wechat_not_foreground')
+    if (uia.current_chat() or '').strip() != request['chat']:
+        raise PreviewUnavailable('conversation_mismatch')
+    messages = uia._message_list()
+    if messages is None:
+        raise PreviewUnavailable('message_not_aligned')
+    # 引用消息通常就在最新一端：滚到底再对齐，位置最确定。
+    try:
+        locator._scroll_list(messages, -120, 20, uia, main, pid)
+    except Exception:
+        pass
+    pause(0.5)
+    rows = locator._visible_rows(messages)
+    index = _find_row(locator, rows, request['sequence'], request['target'])
+    if index is None:
+        raise PreviewUnavailable('message_not_aligned')
+    row = rows[index][2]
+    if row.IsOffscreen:
+        raise PreviewUnavailable('message_not_aligned')
+    rect = row.BoundingRectangle
+    # 引用卡片在气泡下半部分：自己发的在右侧、对方发的在左侧。
+    x = (rect.right - 120) if request.get('is_self') else (rect.left + 120)
+    y = rect.top + int((rect.bottom - rect.top) * 0.66)
+    if not (rect.left <= x < rect.right and rect.top <= y < rect.bottom):
+        raise PreviewUnavailable('message_not_aligned')
+    if win.GetAncestor(win.WindowFromPoint((x, y)), 2) != main:
+        raise PreviewUnavailable('message_not_aligned')
+    if win.GetForegroundWindow() != main or (uia.current_chat() or '').strip() != request['chat']:
+        raise PreviewUnavailable('conversation_mismatch')
+
+    before = _visible_previews(win, process, main, pid)
+    # 如果已经开着一个预览窗（用户点的 / 上一次测试留下的），点引用卡片只会聚焦它、
+    # 不会新建：先关掉属于这个微信进程的旧预览，再点开自己要的那张。
+    for _h in list(before):
+        try:
+            win.PostMessage(_h, 0x0010, 0, 0)
+        except Exception:
+            pass
+    if before:
+        pause(0.4)
+        before = _visible_previews(win, process, main, pid)
+    inp.real_click(x, y)
+    preview = None
+    for _ in range(15):
+        pause(0.15)
+        candidates = _visible_previews(win, process, main, pid) - before
+        if len(candidates) > 1:
+            raise PreviewUnavailable('preview_changed')
+        if len(candidates) == 1:
+            preview = next(iter(candidates))
+            break
+    if preview is None:
+        raise PreviewUnavailable('preview_not_opened')
+    try:
+        pause(0.4)
+        if _visible_previews(win, process, main, pid) - before != {preview}:
+            raise PreviewUnavailable('preview_changed')
+        image = grab(window=preview).convert('RGB')
+        if min(image.size) < 120 or all(lo == hi for lo, hi in image.getextrema()):
+            raise PreviewUnavailable('capture_unavailable')
+        image.thumbnail((2560, 2560))
+        out = io.BytesIO()
+        image.save(out, format='JPEG', quality=88)
+        data = out.getvalue()
+        if len(data) > MAX_IMAGE_BYTES:
+            raise PreviewUnavailable('capture_unavailable')
+        return data
+    finally:
+        try:
+            if preview in _visible_previews(win, process, main, pid):
+                win.PostMessage(preview, 0x0010, 0, 0)
+        except Exception:
+            pass
+
+
+
 def read_image_via_ui(request, log, *, timeout=CAPTURE_TIMEOUT, run=None):
     """父进程只等固定时限。UIA 或截图库挂起时，由 subprocess 终止并回收子进程。"""
     try:
@@ -304,10 +428,16 @@ def _worker():
                 return FAILURES.index('wechat_not_foreground')
             # 直接使用已存在的控件树，避免重新搜窗、激活或建立第二个数据库连接。
             uia._win = root
-            data = capture_preview_image(
-                request, win=win, process=process, uia=uia, locator=MediaDownloader(None),
-                inp=WinInput(), grab=ImageGrab.grab,
-            )
+            if request.get('quote_click'):
+                data = capture_quote_preview(
+                    request, win=win, process=process, uia=uia, locator=MediaDownloader(None),
+                    inp=WinInput(), grab=ImageGrab.grab,
+                )
+            else:
+                data = capture_preview_image(
+                    request, win=win, process=process, uia=uia, locator=MediaDownloader(None),
+                    inp=WinInput(), grab=ImageGrab.grab,
+                )
         output.write(data)
         output.flush()
         return 0

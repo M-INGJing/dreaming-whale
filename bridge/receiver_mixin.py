@@ -223,15 +223,86 @@ class ReceiverMixin:
             return ''
 
 
-    def describe_quoted_image(self, username, svrid):
-        """引用图片：按 svrid（= 本地 server_id）反查图片消息，再委托 describe_image 下载识别。
+    def image_ui_quote_fallback(self, quote_msg):
+        """引用图片：点开引用卡片里的缩略图，微信会直接打开被引用图片的预览。"""
+        account = self.ACCOUNT
+        hwnd = int(account.get('hwnd') or 0)
+        if not quote_msg or not hwnd or not account.get('verified'):
+            return b''
+        try:
+            import win32gui
+            import win32process
+            from image_ui_fallback import build_quote_request, read_image_via_ui
 
-        引用图片的 refermsg 里没有文字正文，只有 <svrid>（被引用消息的 server_id）。
-        这里用它在本地图片消息里反查出 local_id + shard，转成 describe_image 能吃的
-        假 msg 复用它整套「下载 + 重试 + 长图切片 + /api/vision」逻辑。
+            db = self.db
+            pid = win32process.GetWindowThreadProcessId(hwnd)[1] if win32gui.IsWindow(hwnd) else 0
 
-        反查不到 / 下载失败 / 识别失败都返回空串，调用方回退成「一张图片」。
-        """
+            def account_matches():
+                current = self.ACCOUNT
+                return (pid and self.db is db and current.get('verified')
+                        and current.get('hwnd') == hwnd and current.get('pid') in (None, 0, pid)
+                        and self.configured_account_dir() in ('', db.account)
+                        and win32gui.IsWindow(hwnd)
+                        and win32process.GetWindowThreadProcessId(hwnd)[1] == pid)
+
+            if not account_matches():
+                G.log('引用图片兜底跳过 reason=account_unverified')
+                return b''
+            try:
+                self.force_foreground(hwnd)
+            except Exception:
+                pass
+            if win32gui.GetForegroundWindow() != hwnd:
+                G.log('引用图片兜底跳过 reason=wechat_not_foreground')
+                return b''
+            chat_name = self.display_name(quote_msg.get('username') or '')
+            request = build_quote_request(db, quote_msg, chat_name, hwnd, pid)
+            if request is None:
+                G.log('引用图片兜底跳过 reason=message_not_unique')
+                return b''
+            if not self.send_lock.acquire(timeout=1.0):
+                G.log('引用图片兜底跳过 reason=send_busy')
+                return b''
+            try:
+                if not self.gui_lock.acquire(timeout=1.0):
+                    G.log('引用图片兜底跳过 reason=gui_busy')
+                    return b''
+                try:
+                    if not account_matches() or win32gui.GetForegroundWindow() != hwnd:
+                        G.log('引用图片兜底跳过 reason=account_or_foreground_changed')
+                        return b''
+                    try:
+                        gui = getattr(self, 'gui', None)
+                        if gui is None:
+                            maker = getattr(self, 'WeChatGUI', None)
+                            if maker is not None:
+                                gui = maker()
+                                self.gui = gui
+                        if gui is not None:
+                            try:
+                                self.bind_gui_window(gui)
+                            except Exception:
+                                pass
+                            if gui.open_chat(chat_name):
+                                G.time.sleep(0.35)
+                    except Exception as exc:
+                        G.log('引用图片兜底：切会话异常 %r' % exc)
+                    raw = read_image_via_ui(request, G.log)
+                    if raw and not account_matches():
+                        G.log('引用图片兜底丢弃 reason=account_changed')
+                        return b''
+                    return raw
+                finally:
+                    self.gui_lock.release()
+            finally:
+                self.send_lock.release()
+        except Exception as exc:
+            G.log('引用图片兜底异常 type=%s' % type(exc).__name__)
+            return b''
+
+    def describe_quoted_image(self, username, svrid, quote_msg=None):
+        """引用图片：先点引用卡片（微信会直接打开被引用图的预览）截图识别；
+        不行再退回按消息定位截图；都失败返回空串，调用方回退成「一张图片」。"""
         if not username or not svrid:
             return ''
         try:
@@ -247,11 +318,26 @@ class ReceiverMixin:
         if not hit:
             G.log('引用图片反查不到 server_id=%s（会话 %s）' % (svrid, username))
             return ''
+        if quote_msg is not None:
+            raw = self.image_ui_quote_fallback(quote_msg)
+            if raw:
+                text = self._recognize_image(raw)
+                if not text:
+                    G.log('引用图片识别为空，1.5 秒后重试一次')
+                    G.time.sleep(1.5)
+                    raw2 = self.image_ui_quote_fallback(quote_msg)
+                    if raw2:
+                        text = self._recognize_image(raw2)
+                if text:
+                    if len(text) > 1200:
+                        text = text[:1200] + '…'
+                    G.log('引用图片识别：', text[:80])
+                    return text
         lid = hit.get('local_id')
-        shard = hit.get('shard')
         if lid is None:
             return ''
-        return self.describe_image({'username': username, 'local_id': lid, 'shard': shard})
+        return self.describe_image({'username': username, 'local_id': lid, 'shard': hit.get('shard')})
+
 
     def describe_emoji(self, msg):
         """表情包 → 文字描述；失败返回空串（调用方跳过，不回话）。"""
@@ -418,7 +504,7 @@ class ReceiverMixin:
             if _quote_parsed:
                 # 引用图片：refermsg 里没有文字正文，只有 svrid + type=3，反查本地库读图
                 if _ref.get('refer_type') == '3' and _ref.get('svrid'):
-                    _desc = self.describe_quoted_image(username, _ref['svrid'])
+                    _desc = self.describe_quoted_image(username, _ref['svrid'], msg)
                     if _desc:
                         _ref['quoted'] = '一张图片，图里是：%s' % _desc
                     else:
