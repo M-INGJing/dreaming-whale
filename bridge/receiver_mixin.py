@@ -59,8 +59,17 @@ class ReceiverMixin:
                         and win32gui.IsWindow(hwnd)
                         and win32process.GetWindowThreadProcessId(hwnd)[1] == pid)
 
-            if not account_matches() or win32gui.GetForegroundWindow() != hwnd:
-                G.log('图片预览兜底跳过 reason=account_or_foreground_changed')
+            if not account_matches():
+                G.log('图片预览兜底跳过 reason=account_unverified')
+                return b''
+            # 收到图片时前台可能是别的窗口（用户在浏览器/命令行里）：像发送那样
+            # 先把微信拉到前台并确认到位，再让子进程去点气泡截图。
+            try:
+                self.force_foreground(hwnd)
+            except Exception:
+                pass
+            if win32gui.GetForegroundWindow() != hwnd:
+                G.log('图片预览兜底跳过 reason=wechat_not_foreground')
                 return b''
             chat_name = self.display_name(msg.get('username') or '')
             request = build_preview_request(db, msg, chat_name, hwnd, pid)

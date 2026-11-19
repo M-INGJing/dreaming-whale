@@ -81,6 +81,12 @@ def capture_preview_image(request, *, win, process, uia, locator, inp, grab, pau
     messages = uia._message_list()
     rows = locator._visible_rows(messages) if messages is not None else []
     index = locator._align_index(rows, request['sequence'], request['target'])
+    if (index is None and request['target'] >= len(request['sequence']) - 1
+          and rows and rows[-1][0] == 'image'):
+        # 目标是会话里最新的一条、视图底部就是图片：对齐要求两条以上文本锚点，
+        # 大图占满屏或话很少时经常凑不够。这种「最新图就在最底下」的情形直接认
+        # 最后一行（不滚动、不猜其它行）。
+        index = len(rows) - 1
     if index is None:
         raise PreviewUnavailable('message_not_aligned')
     target = rows[index][2]
