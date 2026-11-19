@@ -52,18 +52,19 @@ class ReceivedMediaTests(unittest.TestCase):
                    LOCAL_HTTP=types.SimpleNamespace(post=post))
         return env, post, sleeps
 
-    def test_image_uses_ui_preview_and_sends_it_to_vision(self):
-        # 现行策略：不碰本地解密，直接用界面预览截图（image_ui_fallback）喂视觉
-        post = Mock(return_value=types.SimpleNamespace(json=lambda: {'ok': True, 'text': '蓝色图片'}))
-        fallback = Mock(return_value=self.image.read_bytes())
+    def test_image_uses_ui_preview_and_recognizes_it(self):
+        # 现行策略：不碰本地解密，直接用界面预览截图（image_ui_fallback）交给识别
+        raw = self.image.read_bytes()
+        fallback = Mock(return_value=raw)
+        recognize = Mock(return_value='蓝色图片')
         env = dict(os=os, time=types.SimpleNamespace(sleep=lambda *_: None),
                    bot_url='http://localhost/webhook/wechat', log=Mock(), log_throttled=Mock(),
-                   image_ui_fallback=fallback,
-                   LOCAL_HTTP=types.SimpleNamespace(post=post))
+                   image_ui_fallback=fallback, _recognize_image=recognize,
+                   LOCAL_HTTP=types.SimpleNamespace(post=Mock()))
         result = nested('describe_image', env)({'username': 'peer', 'local_id': 4, 'shard': 'shard2'})
         self.assertEqual(result, '蓝色图片')
         fallback.assert_called_once()
-        self.assertEqual(len(post.call_args_list), 1)
+        recognize.assert_called_once_with(raw)
 
     def test_image_preview_unavailable_stops_without_vision_request(self):
         post = Mock()

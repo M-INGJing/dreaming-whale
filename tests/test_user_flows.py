@@ -184,7 +184,7 @@ class BridgeUserFlows(unittest.TestCase):
                 image_ui_fallback=lambda _msg: b'\x89PNG\r\n\x1a\n' + b'fake',
                 LOCAL_HTTP=types.SimpleNamespace(post=lambda *a, **kw: calls.append(kw['json']) or Response({'ok':True,'text':'OCR'})))
             with patch.dict(sys.modules, {'PIL': types.SimpleNamespace(Image=types.SimpleNamespace(open=lambda *a: Image()))}):
-                self.assertTrue(function('describe_image', env)({'username':'peer','local_id':1}))
+                self.assertTrue(function('_recognize_image', env)(b'\x89PNG\r\n\x1a\n' + b'fake'))
         self.assertEqual(len(calls), 2)
         self.assertTrue(all(call['mime']=='image/jpeg' for call in calls))
 

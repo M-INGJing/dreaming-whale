@@ -102,25 +102,11 @@ class ReceiverMixin:
             G.log('图片预览兜底异常 type=%s' % type(exc).__name__)
             return b''
 
-    def describe_image(self, msg):
-        """图片识别：直接读微信已经渲染好的预览（不再尝试本地解密）。
-
-        本地 .dat 是 V2 密文、密钥在微信进程里取不到，所以跳过磁盘解密这条路，
-        直接走界面预览兜底：点开目标图片 → 截预览窗 → /api/vision。
-        兜底失败返回 ''，由调用方按「这条不回话」处理。
-        """
+    def _recognize_image(self, raw):
+        """把一张图（bytes）交给 /api/vision，返回识别文本；空串=没认出来。"""
         try:
             import base64
-            user = msg.get('username') or ''
-            lid = msg.get('local_id')
-            if not user or lid is None:
-                return ''
-            raw = self.image_ui_fallback(msg)
-            if not raw:
-                G.log('图片预览兜底没取到（消息id=%s），这条不回话' % lid)
-                return ''
-            if len(raw) > 8 * 1024 * 1024:
-                G.log('图片太大，跳过')
+            if not raw or len(raw) > 8 * 1024 * 1024:
                 return ''
             if raw[:8] == b'\x89PNG\r\n\x1a\n':
                 ext = '.png'
@@ -131,7 +117,6 @@ class ReceiverMixin:
             else:
                 G.log('图片格式不认识（%s），跳过' % raw[:4])
                 return ''
-            
             mime = 'image/png' if ext == '.png' else 'image/gif' if ext == '.gif' else 'image/jpeg'
             base = self.bot_url.rsplit('/webhook', 1)[0]
             parts = [raw]
@@ -154,7 +139,6 @@ class ReceiverMixin:
                         parts.append(buf.getvalue())
                     mime = 'image/jpeg'
                     G.log('长截图 %dx%d，切成 %d 段分别识别' % (w, h, len(parts)))
-                    mime = 'image/jpeg'
                 else:
                     img2 = img.convert('RGB')
                     buf = _io.BytesIO()
@@ -176,7 +160,38 @@ class ReceiverMixin:
                     texts.append(piece)
                 if not data.get('ok', True):
                     G.log_throttled('img-fail:' + str(data.get('error'))[:40], '第 %d 段识别失败：%s' % (idx + 1, data.get('error')))
-            text = '\n'.join(texts).strip()
+            return '\n'.join(texts).strip()
+        except Exception as e:
+            G.log_throttled('img-rec:' + type(e).__name__, '图片识别异常：', repr(e))
+            return ''
+
+    def describe_image(self, msg):
+        """图片识别：直接读微信已经渲染好的预览（不再尝试本地解密）。
+
+        本地 .dat 是 V2 密文、密钥在微信进程里取不到，所以跳过磁盘解密这条路，
+        直接走界面预览兜底：点开目标图片 → 截预览窗 → /api/vision。
+        预览窗刚打开时可能还没渲染完（截到加载态），识别为空就等 1.5 秒重截一次。
+        两次都失败返回 ''，由调用方按「这条不回话」处理。
+        """
+        try:
+            user = msg.get('username') or ''
+            lid = msg.get('local_id')
+            if not user or lid is None:
+                return ''
+            raw = self.image_ui_fallback(msg)
+            if not raw:
+                G.log('图片预览兜底没取到（消息id=%s），这条不回话' % lid)
+                return ''
+            text = self._recognize_image(raw)
+            if not text:
+                G.log('图片识别为空，1.5 秒后重截一次（消息id=%s）' % lid)
+                G.time.sleep(1.5)
+                raw2 = self.image_ui_fallback(msg)
+                if raw2:
+                    text = self._recognize_image(raw2)
+            if not text:
+                G.log('图片识别失败（消息id=%s），这条不回话' % lid)
+                return ''
             if len(text) > 1200:
                 text = text[:1200] + '…'
             G.log('图片识别：', text[:80])
@@ -186,6 +201,7 @@ class ReceiverMixin:
                 msg['_media_fail'] = type(e).__name__
             G.log_throttled('img-exc:' + type(e).__name__, '图片识别失败：', repr(e))
             return ''
+
 
     def describe_quoted_image(self, username, svrid):
         """引用图片：按 svrid（= 本地 server_id）反查图片消息，再委托 describe_image 下载识别。
