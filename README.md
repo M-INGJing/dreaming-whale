@@ -81,17 +81,37 @@ Copy-Item launcher/publish/WhaleLauncher.exe .\WhaleLauncher.exe -Force
 
 ---
 
-## 📁 目录结构
+## Project structure / 目录结构
 
 ```
-src/           内核（core / pipeline / persona / memory / llm / services / adapters / http / infra）
-bridge/        Python 微信桥接（收发、UIA/后台发送、表情包、语音、B 站 outbox）
-launcher/      WPF 启动器（.NET 10，产物 WhaleLauncher.exe）
-tests/         Node / Python 回归测试
-docs/          设计与使用文档
-scripts/       自检、发布、打包、隐私扫描
-data/          运行时数据（聊天记忆、日记、表情包；不入库）
+.
+├─ .gitattributes
+├─ .gitignore
+├─ .github
+├─ AGENTS.md
+├─ BUGS.md
+├─ CHANGELOG.md
+├─ CONTRIBUTING.md
+├─ LICENSE
+├─ README.md
+├─ WhaleLauncher.exe
+├─ config.example.json
+├─ package.json
+├─ requirements.txt
+├─ server.js
+├─ assets
+├─ bridge
+├─ docs
+├─ examples
+├─ installer
+├─ launcher
+├─ scripts
+├─ src
+├─ tests
+└─ vendor
 ```
+
+> `src/` 内核、`bridge/` Python 微信桥接、`launcher/` WPF 启动器、`docs/` 文档、`scripts/` 自检 / 发布 / 打包、`tests/` 回归测试、`vendor/` 本地依赖。运行时数据（聊天记忆、日记、表情包等）在 `data/`，不入库。
 
 ---
 
@@ -125,6 +145,14 @@ node tests/bot.test.js            # 单文件跑；完整清单见 tests/
 - 原始项目：**鲸鲸 / Whale Girl**，作者与贡献者见上游仓库 <https://github.com/Banan1cee/whale_girl>。
 - 本 fork 的修改与维护：<https://github.com/M-INGJing/dreaming-whale>。
 - 二次分发请保留本文件、`LICENSE` 与上游版权声明；AGPL 要求修改后的网络服务也提供源码。
+
+## Code signing policy
+
+> 当前构建尚未签名（not signed yet）。签名策略、角色分工与验证方法见 [CODE_SIGNING_POLICY.md](docs/CODE_SIGNING_POLICY.md)。
+
+## Download
+
+> 本仓库不发布官方安装包，以源码运行 / 自行构建为主；下载、校验与安装说明见 [DOWNLOAD.md](docs/DOWNLOAD.md)。隐私声明见 [PRIVACY.md](PRIVACY.md)。
 
 ## ⚠️ 免责声明
 
