@@ -11,7 +11,7 @@ from contextlib import redirect_stdout
 
 CAPTURE_TIMEOUT = 12
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
-MAX_HISTORY = 120
+MAX_HISTORY = 300
 MAX_REQUEST_BYTES = 128 * 1024
 FAILURES = (
     '', 'internal_error', 'wechat_not_foreground', 'conversation_mismatch',
@@ -33,10 +33,20 @@ def build_preview_request(db, msg, chat_name, hwnd, pid):
     sequence, targets = [], []
     for row in reversed(db.get_messages(username, limit=MAX_HISTORY)):
         kind = {'文本': 'text', '图片': 'image'}.get(row.get('type'))
+        content = str(row.get('content') or '')
+        if kind is None and '<title>' in content:
+            # 引用/卡片类 appmsg 在界面上就是一行文字（标题 + 引用块），
+            # 序列里必须按文本对待；否则可视行比序列多一行，对齐全错位。
+            import re as _re
+            import html as _html
+            _m = _re.search(r'<title>(.*?)</title>', content, _re.S)
+            if _m:
+                kind = 'text'
+                content = _html.unescape(_m.group(1)).strip()
         if not kind:
             continue
         index = len(sequence)
-        anchor = str(row.get('content') or '').strip()[:160] if kind == 'text' else ''
+        anchor = content.strip()[:160] if kind == 'text' else ''
         sequence.append({'kind': kind, 'content': anchor, 'local_id': index})
         if (kind == 'image' and row.get('local_id') == local_id
                 and (not shard or row.get('shard') == shard)):
@@ -72,6 +82,65 @@ def _visible_previews(win, process, main, pid):
     return handles
 
 
+def _locate_target_row(locator, messages, request, uia, deadline):
+    """把目标消息滚进可视区并返回它的行控件；认不出返回 None。
+
+    先用严格对齐；对不上就借 _align_window 的窗口偏移判断目标在可视区上方还是下方，
+    逐格朝那个方向滚，边滚边对齐。到时限或两个方向都滚不动就放弃（绝不猜行）。
+    """
+    seq, target = request['sequence'], request['target']
+    hwnd, pid = request['hwnd'], request['pid']
+    rows = locator._visible_rows(messages)
+    index = locator._align_index(rows, seq, target)
+    if index is not None and 0 <= index < len(rows) and not rows[index][2].IsOffscreen:
+        return rows[index][2]
+    tried_reverse = False
+    last_step = -120                 # 记住上一次成功的滚动方向，对齐失败时沿用
+    # 先滚到底建立确定性锚点：从「最新」一端开始，目标只会在上方，
+    # 方向判断不会受用户当前滚动位置影响。
+    try:
+        locator._scroll_list(messages, -120, 20, uia, hwnd, pid)
+        time.sleep(0.3)
+    except Exception:
+        pass
+    step = -120                      # 默认先往「更新」方向滚（新图通常在下边）
+    while time.time() < deadline:
+        rows = locator._visible_rows(messages)
+        if rows:
+            w = None
+            try:
+                w = locator._align_window(rows, seq, 0.95, 1)
+            except Exception:
+                w = None
+            if w is not None:
+                j = target - w['offset']
+                if 0 <= j < len(rows) and not rows[j][2].IsOffscreen:
+                    return rows[j][2]
+                if j >= len(rows):
+                    step, times = -120, min(6, max(1, j - len(rows) + 1))
+                else:
+                    step, times = 120, min(6, max(2, -j))
+                last_step = step
+            else:
+                # 对齐失败（可视行里图片太多、锚点不够）：沿用上一次的方向，
+                # 别直接掉头——掉头会把刚滚过来的目标又滚出去。
+                step, times = last_step, 2
+        before = [(k, n) for k, n, _ in rows]
+        try:
+            locator._scroll_list(messages, step, times, uia, hwnd, pid)
+        except Exception:
+            return None
+        time.sleep(0.2)
+        after = locator._visible_rows(messages)
+        if [(k, n) for k, n, _ in after] == before:
+            if tried_reverse:
+                return None
+            tried_reverse = True
+            step = -step
+    return None
+
+
+
 def capture_preview_image(request, *, win, process, uia, locator, inp, grab, pause=time.sleep):
     main, pid = request['hwnd'], request['pid']
     if (not win.IsWindow(main) or not win.IsWindowVisible(main) or win.IsIconic(main)
@@ -83,27 +152,8 @@ def capture_preview_image(request, *, win, process, uia, locator, inp, grab, pau
     rows = locator._visible_rows(messages) if messages is not None else []
     index = locator._align_index(rows, request['sequence'], request['target'])
     target = rows[index][2] if index is not None and 0 <= index < len(rows) else None
-    if target is None:
-        # 目标不在可视区（或文本锚点不够对不齐）：按数据库行差滚过去再认，
-        # 带落点归属校验；滚不动 / 还是认不出就放弃，绝不猜别的行。
-        locate = getattr(locator, '_locate_image_row', None)
-        if locate is not None and messages is not None:
-            try:
-                target, _why = locate(request['target'], messages, request['sequence'],
-                                      uia, request['hwnd'], request['pid'],
-                                      time.time() + 4.0, max_scrolls=4)
-            except Exception:
-                target = None
-    if target is None and request.get('newest') and messages is not None:
-        # 目标就是会话最新一条：列表可能没滚到底（用户往上翻，或大图占屏让对齐锚点不够）。
-        # 先滚到底再认——底部最后一行就是这条新消息。
-        try:
-            locator._scroll_list(messages, -120, 10, uia, request['hwnd'], request['pid'])
-        except Exception:
-            pass
-        rows = locator._visible_rows(messages)
-        if rows and rows[-1][0] == 'image' and not rows[-1][2].IsOffscreen:
-            target = rows[-1][2]
+    if target is None and messages is not None:
+        target = _locate_target_row(locator, messages, request, uia, time.time() + 8.0)
     if target is None:
         raise PreviewUnavailable('message_not_aligned')
     if target.IsOffscreen:
