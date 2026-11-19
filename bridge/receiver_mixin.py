@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Bridge runtime mixin: ReceiverMixin."""
 import engine as G
-from quote_parser import quote_content_text
+from quote_parser import parse_quote_ref, format_quote
 
 
 class ReceiverMixin:
@@ -138,6 +138,36 @@ class ReceiverMixin:
                 msg['_media_fail'] = type(e).__name__
             G.log_throttled('img-exc:' + type(e).__name__, '图片识别失败：', repr(e))
             return ''
+
+    def describe_quoted_image(self, username, svrid):
+        """引用图片：按 svrid（= 本地 server_id）反查图片消息，再委托 describe_image 下载识别。
+
+        引用图片的 refermsg 里没有文字正文，只有 <svrid>（被引用消息的 server_id）。
+        这里用它在本地图片消息里反查出 local_id + shard，转成 describe_image 能吃的
+        假 msg 复用它整套「下载 + 重试 + 长图切片 + /api/vision」逻辑。
+
+        反查不到 / 下载失败 / 识别失败都返回空串，调用方回退成「一张图片」。
+        """
+        if not username or not svrid:
+            return ''
+        try:
+            rows = self.db.get_image_rows(username, limit=300)
+        except Exception as e:
+            G.log('引用图片反查失败（会话 %s）：%s' % (username, repr(e)))
+            return ''
+        hit = None
+        for r in rows or []:
+            if str(r.get('server_id') or '') == str(svrid):
+                hit = r
+                break
+        if not hit:
+            G.log('引用图片反查不到 server_id=%s（会话 %s）' % (svrid, username))
+            return ''
+        lid = hit.get('local_id')
+        shard = hit.get('shard')
+        if lid is None:
+            return ''
+        return self.describe_image({'username': username, 'local_id': lid, 'shard': shard})
 
     def describe_emoji(self, msg):
         """表情包 → 文字描述；失败返回空串（调用方跳过，不回话）。"""
@@ -297,10 +327,19 @@ class ReceiverMixin:
                     return
                 content = '（对方发了一条语音，说的是：%s）' % said
             # 引用回复：微信存的是 appmsg XML（类型名落到「文件/链接/卡片」），
-            # 原来的分支找不到 <url> 就把整条丢掉。这里先拆出被引用原话和新打的字。
-            _quote_text = quote_content_text(content) if mtype not in ('文本', '语音', '图片', '表情', '动画表情') else None
-            _quote_parsed = _quote_text is not None
+            # 原来的分支找不到 <url> 就把整条丢掉。这里先拆出被引用原话和新打的字；
+            # 引用图片时用 svrid 反查本地图片下载识别。
+            _ref = parse_quote_ref(content) if mtype not in ('文本', '语音', '图片', '表情', '动画表情') else None
+            _quote_parsed = _ref is not None
             if _quote_parsed:
+                # 引用图片：refermsg 里没有文字正文，只有 svrid + type=3，反查本地库读图
+                if _ref.get('refer_type') == '3' and _ref.get('svrid'):
+                    _desc = self.describe_quoted_image(username, _ref['svrid'])
+                    if _desc:
+                        _ref['quoted'] = '一张图片，图里是：%s' % _desc
+                    else:
+                        _ref['quoted'] = '一张图片'
+                _quote_text = format_quote(_ref)
                 if not _quote_text:
                     G.log('引用消息里没有可读内容，先不回话')
                     return

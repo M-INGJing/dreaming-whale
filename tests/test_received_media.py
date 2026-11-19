@@ -69,6 +69,29 @@ class ReceivedMediaTests(unittest.TestCase):
         self.assertEqual(sleeps, [0.5, 1, 2])
         post.assert_not_called()
 
+    def test_quoted_image_resolves_svrid_and_delegates(self):
+        env = dict(log=Mock())
+        env['db'] = Mock()
+        env['db'].get_image_rows.return_value = [
+            {'server_id': 111, 'local_id': 4, 'shard': 'shard2'},
+            {'server_id': 999888, 'local_id': 7, 'shard': 'shard1'},
+        ]
+        env['describe_image'] = Mock(return_value='一只猫')
+        result = nested('describe_quoted_image', env)('peer', '999888')
+        self.assertEqual(result, '一只猫')
+        env['describe_image'].assert_called_once_with(
+            {'username': 'peer', 'local_id': 7, 'shard': 'shard1'})
+        env['db'].get_image_rows.assert_called_once_with('peer', limit=300)
+
+    def test_quoted_image_miss_returns_empty(self):
+        env = dict(log=Mock())
+        env['db'] = Mock()
+        env['db'].get_image_rows.return_value = [{'server_id': 111, 'local_id': 4, 'shard': 's'}]
+        env['describe_image'] = Mock(return_value='x')
+        result = nested('describe_quoted_image', env)('peer', '999888')
+        self.assertEqual(result, '')
+        env['describe_image'].assert_not_called()
+
     def test_decryption_validates_current_image_instead_of_old_probe(self):
         target = self.root / 'target.dat'
         probe = b'current-probe-16'
