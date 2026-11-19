@@ -46,7 +46,8 @@ def build_preview_request(db, msg, chat_name, hwnd, pid):
     index, row = targets[0]
     self_id = getattr(db, 'wxid', None)
     return {'hwnd': hwnd, 'pid': pid, 'chat': chat_name, 'sequence': sequence, 'target': index,
-            'is_self': bool(self_id and row.get('sender_username') == self_id)}
+            'is_self': bool(self_id and row.get('sender_username') == self_id),
+            'newest': index >= len(sequence) - 1}
 
 
 def _visible_previews(win, process, main, pid):
@@ -81,15 +82,30 @@ def capture_preview_image(request, *, win, process, uia, locator, inp, grab, pau
     messages = uia._message_list()
     rows = locator._visible_rows(messages) if messages is not None else []
     index = locator._align_index(rows, request['sequence'], request['target'])
-    if (index is None and request['target'] >= len(request['sequence']) - 1
-          and rows and rows[-1][0] == 'image'):
-        # 目标是会话里最新的一条、视图底部就是图片：对齐要求两条以上文本锚点，
-        # 大图占满屏或话很少时经常凑不够。这种「最新图就在最底下」的情形直接认
-        # 最后一行（不滚动、不猜其它行）。
-        index = len(rows) - 1
-    if index is None:
+    target = rows[index][2] if index is not None and 0 <= index < len(rows) else None
+    if target is None:
+        # 目标不在可视区（或文本锚点不够对不齐）：按数据库行差滚过去再认，
+        # 带落点归属校验；滚不动 / 还是认不出就放弃，绝不猜别的行。
+        locate = getattr(locator, '_locate_image_row', None)
+        if locate is not None and messages is not None:
+            try:
+                target, _why = locate(request['target'], messages, request['sequence'],
+                                      uia, request['hwnd'], request['pid'],
+                                      time.time() + 4.0, max_scrolls=4)
+            except Exception:
+                target = None
+    if target is None and request.get('newest') and messages is not None:
+        # 目标就是会话最新一条：列表可能没滚到底（用户往上翻，或大图占屏让对齐锚点不够）。
+        # 先滚到底再认——底部最后一行就是这条新消息。
+        try:
+            locator._scroll_list(messages, -120, 10, uia, request['hwnd'], request['pid'])
+        except Exception:
+            pass
+        rows = locator._visible_rows(messages)
+        if rows and rows[-1][0] == 'image' and not rows[-1][2].IsOffscreen:
+            target = rows[-1][2]
+    if target is None:
         raise PreviewUnavailable('message_not_aligned')
-    target = rows[index][2]
     if target.IsOffscreen:
         raise PreviewUnavailable('message_not_aligned')
 
