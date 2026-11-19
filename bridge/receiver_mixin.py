@@ -30,6 +30,54 @@ class ReceiverMixin:
             self._media_box['downloader'] = dl
             return dl
 
+    def _image_key_ready(self, timeout=6.0):
+        """图片 AES 密钥现在能不能用；不能用就别进 120 秒级等待。
+
+        wechatauto 的下载器在拿不到密钥时，每一档都会等满 120 秒（4 轮 × full/best
+        两档 ≈ 16 分钟），而这段时间跑在会话的串行 worker 里 —— 会把同一会话后面
+        所有消息（包括普通文字）一起堵死。这里先廉价探测一次（线程 + 超时），
+        失败结果在本进程缓存 60 秒，期间所有图片直接跳过、回退占位。
+        """
+        now = G.time.time()
+        cached = getattr(self, '_img_key_ok', None)
+        if cached is not None and now - getattr(self, '_img_key_checked', 0.0) < 60.0:
+            return cached
+        box = {}
+
+        def probe():
+            try:
+                md = self._get_media()
+                det = getattr(md, 'detect_image_key', None)
+                if det is None:
+                    # 下载器没有探测能力（老版本 / 测试替身）：按可用处理，走原流程
+                    box['ok'] = True
+                    return
+                box['ok'] = bool(det(refresh=False))
+            except Exception as e:  # noqa: BLE001 - 探测失败按不可用处理
+                box['e'] = e
+
+        try:
+            import threading as _th
+        except Exception:  # pragma: no cover - 理论上不会
+            _th = None
+        if _th is None:
+            return True
+        th = _th.Thread(target=probe, daemon=True)
+        th.start()
+        th.join(timeout)
+        if th.is_alive():
+            G.log('图片密钥探测超时（%.0fs），本次跳过图片识别' % timeout)
+            ok = False
+        else:
+            if 'e' in box:
+                G.log('图片密钥探测失败：', repr(box['e']))
+            ok = bool(box.get('ok'))
+        self._img_key_ok = ok
+        self._img_key_checked = now
+        if not ok:
+            G.log('图片密钥不可用，本次跳过图片识别（回退「一张图片」，不阻塞会话）')
+        return ok
+
     def describe_image(self, msg):
         try:
             import base64
@@ -37,6 +85,9 @@ class ReceiverMixin:
             lid = msg.get('local_id')
             shard = msg.get('shard')
             if not user or lid is None:
+                return ''
+            _keychk = getattr(self, '_image_key_ready', None)
+            if _keychk is not None and not _keychk():
                 return ''
             path = None
             for _attempt in range(4):
@@ -168,6 +219,33 @@ class ReceiverMixin:
         if lid is None:
             return ''
         return self.describe_image({'username': username, 'local_id': lid, 'shard': shard})
+
+    def describe_quoted_image_bounded(self, username, svrid, timeout=8.0):
+        """带总时限的引用图片识别：超时就先按「一张图片」回，不堵会话。
+
+        引用图片要下载 + 解密 + 视觉识别，任何一步慢（缺 AES 密钥、视觉接口排队）
+        都会把这条会话的串行 worker 占住，后面的文字消息全排队。这里用线程 +
+        join 给一个硬上限，到点就放弃识别、走占位符。
+        """
+        box = {}
+
+        def run():
+            try:
+                box['v'] = self.describe_quoted_image(username, svrid)
+            except Exception as e:  # noqa: BLE001 - 识别失败按空描述处理
+                box['e'] = e
+
+        import threading as _th
+        th = _th.Thread(target=run, daemon=True)
+        th.start()
+        th.join(timeout)
+        if th.is_alive():
+            G.log('引用图片识别超时（%.0fs），先按「一张图片」回，不阻塞会话' % timeout)
+            return ''
+        if 'e' in box:
+            G.log('引用图片识别异常：', repr(box['e']))
+            return ''
+        return box.get('v') or ''
 
     def describe_emoji(self, msg):
         """表情包 → 文字描述；失败返回空串（调用方跳过，不回话）。"""
@@ -334,7 +412,9 @@ class ReceiverMixin:
             if _quote_parsed:
                 # 引用图片：refermsg 里没有文字正文，只有 svrid + type=3，反查本地库读图
                 if _ref.get('refer_type') == '3' and _ref.get('svrid'):
-                    _desc = self.describe_quoted_image(username, _ref['svrid'])
+                    _bounded = getattr(self, 'describe_quoted_image_bounded', None)
+                    _desc = (_bounded(username, _ref['svrid']) if _bounded
+                             else self.describe_quoted_image(username, _ref['svrid']))
                     if _desc:
                         _ref['quoted'] = '一张图片，图里是：%s' % _desc
                     else:
