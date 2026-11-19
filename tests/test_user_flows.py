@@ -181,7 +181,7 @@ class BridgeUserFlows(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             image = Path(folder)/'long.png'; image.write_bytes(b'\x89PNG\r\n\x1a\n' + b'fake')
             env = dict(os=os, bot_url='http://localhost/webhook/wechat', log=lambda *a: None, log_throttled=lambda *a: None,
-                _get_media=lambda: types.SimpleNamespace(download_image=lambda *a, **k: str(image)),
+                image_ui_fallback=lambda _msg: b'\x89PNG\r\n\x1a\n' + b'fake',
                 LOCAL_HTTP=types.SimpleNamespace(post=lambda *a, **kw: calls.append(kw['json']) or Response({'ok':True,'text':'OCR'})))
             with patch.dict(sys.modules, {'PIL': types.SimpleNamespace(Image=types.SimpleNamespace(open=lambda *a: Image()))}):
                 self.assertTrue(function('describe_image', env)({'username':'peer','local_id':1}))

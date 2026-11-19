@@ -30,111 +30,99 @@ class ReceiverMixin:
             self._media_box['downloader'] = dl
             return dl
 
-    def _image_key_ready(self, timeout=6.0):
-        """图片 AES 密钥现在能不能用；不能用就别进 120 秒级等待。
+    def image_ui_fallback(self, msg):
+        """磁盘图片解不开时的界面兜底：核实账号后，在限时子进程内读取微信预览。
 
-        wechatauto 的下载器在拿不到密钥时，每一档都会等满 120 秒（4 轮 × full/best
-        两档 ≈ 16 分钟），而这段时间跑在会话的串行 worker 里 —— 会把同一会话后面
-        所有消息（包括普通文字）一起堵死。这里先廉价探测一次（线程 + 超时），
-        失败结果在本进程缓存 60 秒，期间所有图片直接跳过、回退占位。
+        上游 Banan1cee/whale_girl 的实现（commit 82207c6）：本地 .dat 是 AES 密文，
+        4.2 版微信又不让我们拿到密钥，于是退到「让微信自己把图画出来再截图」。
+        所有副作用（点气泡、开预览窗、关窗）都在 image_ui_fallback 模块里，
+        整段跑在限时子进程内，失败返回 b''（按「这条不回话」处理）。
         """
-        now = G.time.time()
-        cached = getattr(self, '_img_key_ok', None)
-        if cached is not None and now - getattr(self, '_img_key_checked', 0.0) < 60.0:
-            return cached
-        box = {}
-
-        def probe():
-            try:
-                md = self._get_media()
-                det = getattr(md, 'detect_image_key', None)
-                if det is None:
-                    # 下载器没有探测能力（老版本 / 测试替身）：按可用处理，走原流程
-                    box['ok'] = True
-                    return
-                box['ok'] = bool(det(refresh=False))
-            except Exception as e:  # noqa: BLE001 - 探测失败按不可用处理
-                box['e'] = e
-
+        account = self.ACCOUNT
+        hwnd = int(account.get('hwnd') or 0)
+        if not hwnd or not account.get('verified'):
+            G.log('图片预览兜底跳过 reason=account_unverified')
+            return b''
         try:
-            import threading as _th
-        except Exception:  # pragma: no cover - 理论上不会
-            _th = None
-        if _th is None:
-            return True
-        th = _th.Thread(target=probe, daemon=True)
-        th.start()
-        th.join(timeout)
-        if th.is_alive():
-            G.log('图片密钥探测超时（%.0fs），本次跳过图片识别' % timeout)
-            ok = False
-        else:
-            if 'e' in box:
-                G.log('图片密钥探测失败：', repr(box['e']))
-            ok = bool(box.get('ok'))
-        self._img_key_ok = ok
-        self._img_key_checked = now
-        if not ok:
-            G.log('图片密钥不可用，本次跳过图片识别（回退「一张图片」，不阻塞会话）')
-        return ok
+            import win32gui
+            import win32process
+            from image_ui_fallback import build_preview_request, read_image_via_ui
+
+            db = self.db
+            pid = win32process.GetWindowThreadProcessId(hwnd)[1] if win32gui.IsWindow(hwnd) else 0
+
+            def account_matches():
+                current = self.ACCOUNT
+                return (pid and self.db is db and current.get('verified')
+                        and current.get('hwnd') == hwnd and current.get('pid') in (None, 0, pid)
+                        and self.configured_account_dir() in ('', db.account)
+                        and win32gui.IsWindow(hwnd)
+                        and win32process.GetWindowThreadProcessId(hwnd)[1] == pid)
+
+            if not account_matches() or win32gui.GetForegroundWindow() != hwnd:
+                G.log('图片预览兜底跳过 reason=account_or_foreground_changed')
+                return b''
+            chat_name = self.display_name(msg.get('username') or '')
+            request = build_preview_request(db, msg, chat_name, hwnd, pid)
+            if request is None:
+                G.log('图片预览兜底跳过 reason=message_not_unique')
+                return b''
+
+            # 先占发送锁再占界面锁，与朋友圈/发送一致。子进程退出后立即释放。
+            if not self.send_lock.acquire(timeout=1.0):
+                G.log('图片预览兜底跳过 reason=send_busy')
+                return b''
+            try:
+                if not self.gui_lock.acquire(timeout=1.0):
+                    G.log('图片预览兜底跳过 reason=gui_busy')
+                    return b''
+                try:
+                    if not account_matches() or win32gui.GetForegroundWindow() != hwnd:
+                        G.log('图片预览兜底跳过 reason=account_or_foreground_changed')
+                        return b''
+                    raw = read_image_via_ui(request, G.log)
+                    if raw and not account_matches():
+                        G.log('图片预览兜底丢弃 reason=account_changed')
+                        return b''
+                    return raw
+                finally:
+                    self.gui_lock.release()
+            finally:
+                self.send_lock.release()
+        except Exception as exc:  # noqa: BLE001 - 兜底失败不影响其它消息
+            G.log('图片预览兜底异常 type=%s' % type(exc).__name__)
+            return b''
 
     def describe_image(self, msg):
+        """图片识别：直接读微信已经渲染好的预览（不再尝试本地解密）。
+
+        本地 .dat 是 V2 密文、密钥在微信进程里取不到，所以跳过磁盘解密这条路，
+        直接走界面预览兜底：点开目标图片 → 截预览窗 → /api/vision。
+        兜底失败返回 ''，由调用方按「这条不回话」处理。
+        """
         try:
             import base64
             user = msg.get('username') or ''
             lid = msg.get('local_id')
-            shard = msg.get('shard')
             if not user or lid is None:
                 return ''
-            _keychk = getattr(self, '_image_key_ready', None)
-            if _keychk is not None and not _keychk():
+            raw = self.image_ui_fallback(msg)
+            if not raw:
+                G.log('图片预览兜底没取到（消息id=%s），这条不回话' % lid)
                 return ''
-            path = None
-            for _attempt in range(4):
-                for _tier in ('full', 'best'):
-                    try:
-                        path = self._get_media().download_image(user, int(lid), tier=_tier, shard=shard)
-                    except Exception as _e:
-                        G.log('图片下载失败（tier=%s）：%r' % (_tier, _e))
-                        path = None
-                    if path:
-                        G.log('图片档位：%s → %d KB' % (_tier, G.os.path.getsize(path) // 1024))
-                        break
-                if path:
-                    break
-                if _attempt < 3:
-                    G.log('图片缓存尚未就绪，等待重试（%d/3）' % (_attempt + 1))
-                    G.time.sleep((0.5, 1.0, 2.0)[_attempt])
-            if not path:
-                G.log('图片读取失败：已重试；请确认接收端微信已下载图片（消息id=%s，分片=%s）' % (lid, shard))
-                return ''
-            with open(path, 'rb') as f:
-                raw = f.read()
             if len(raw) > 8 * 1024 * 1024:
                 G.log('图片太大，跳过')
                 return ''
-            if raw[:4] == b'wxgf':
-                try:
-                    conv = self._get_media()._wxgf_to_jpg(raw)
-                except Exception as _e:
-                    conv = None
-                    G.log('wxgf 转码异常：', repr(_e))
-                if not conv:
-                    G.log('这张图是 wxgf/HEVC，本机 ffmpeg 没能转出来，跳过（装 ffmpeg 到 C:\\ffmpeg 即可）')
-                    return ''
-                raw = conv
-                ext = '.jpg'
-            elif raw[:8] == b'\x89PNG\r\n\x1a\n':
+            if raw[:8] == b'\x89PNG\r\n\x1a\n':
                 ext = '.png'
             elif raw[:3] == b'\xff\xd8\xff':
                 ext = '.jpg'
             elif raw[:3] == b'GIF':
                 ext = '.gif'
             else:
-                ext = G.os.path.splitext(path)[1].lower()
-                if ext not in ('.jpg', '.jpeg', '.png', '.gif'):
-                    G.log('图片格式不认识（%s），跳过' % raw[:4])
-                    return ''
+                G.log('图片格式不认识（%s），跳过' % raw[:4])
+                return ''
+            
             mime = 'image/png' if ext == '.png' else 'image/gif' if ext == '.gif' else 'image/jpeg'
             base = self.bot_url.rsplit('/webhook', 1)[0]
             parts = [raw]
@@ -219,33 +207,6 @@ class ReceiverMixin:
         if lid is None:
             return ''
         return self.describe_image({'username': username, 'local_id': lid, 'shard': shard})
-
-    def describe_quoted_image_bounded(self, username, svrid, timeout=8.0):
-        """带总时限的引用图片识别：超时就先按「一张图片」回，不堵会话。
-
-        引用图片要下载 + 解密 + 视觉识别，任何一步慢（缺 AES 密钥、视觉接口排队）
-        都会把这条会话的串行 worker 占住，后面的文字消息全排队。这里用线程 +
-        join 给一个硬上限，到点就放弃识别、走占位符。
-        """
-        box = {}
-
-        def run():
-            try:
-                box['v'] = self.describe_quoted_image(username, svrid)
-            except Exception as e:  # noqa: BLE001 - 识别失败按空描述处理
-                box['e'] = e
-
-        import threading as _th
-        th = _th.Thread(target=run, daemon=True)
-        th.start()
-        th.join(timeout)
-        if th.is_alive():
-            G.log('引用图片识别超时（%.0fs），先按「一张图片」回，不阻塞会话' % timeout)
-            return ''
-        if 'e' in box:
-            G.log('引用图片识别异常：', repr(box['e']))
-            return ''
-        return box.get('v') or ''
 
     def describe_emoji(self, msg):
         """表情包 → 文字描述；失败返回空串（调用方跳过，不回话）。"""
@@ -412,9 +373,7 @@ class ReceiverMixin:
             if _quote_parsed:
                 # 引用图片：refermsg 里没有文字正文，只有 svrid + type=3，反查本地库读图
                 if _ref.get('refer_type') == '3' and _ref.get('svrid'):
-                    _bounded = getattr(self, 'describe_quoted_image_bounded', None)
-                    _desc = (_bounded(username, _ref['svrid']) if _bounded
-                             else self.describe_quoted_image(username, _ref['svrid']))
+                    _desc = self.describe_quoted_image(username, _ref['svrid'])
                     if _desc:
                         _ref['quoted'] = '一张图片，图里是：%s' % _desc
                     else:

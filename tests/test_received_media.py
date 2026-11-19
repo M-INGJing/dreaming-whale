@@ -52,21 +52,26 @@ class ReceivedMediaTests(unittest.TestCase):
                    LOCAL_HTTP=types.SimpleNamespace(post=post))
         return env, post, sleeps
 
-    def test_image_waits_for_cache_and_keeps_message_shard(self):
-        download = Mock(side_effect=[None, None, str(self.image)])
-        env, post, sleeps = self.env(download)
+    def test_image_uses_ui_preview_and_sends_it_to_vision(self):
+        # 现行策略：不碰本地解密，直接用界面预览截图（image_ui_fallback）喂视觉
+        post = Mock(return_value=types.SimpleNamespace(json=lambda: {'ok': True, 'text': '蓝色图片'}))
+        fallback = Mock(return_value=self.image.read_bytes())
+        env = dict(os=os, time=types.SimpleNamespace(sleep=lambda *_: None),
+                   bot_url='http://localhost/webhook/wechat', log=Mock(), log_throttled=Mock(),
+                   image_ui_fallback=fallback,
+                   LOCAL_HTTP=types.SimpleNamespace(post=post))
         result = nested('describe_image', env)({'username': 'peer', 'local_id': 4, 'shard': 'shard2'})
         self.assertEqual(result, '蓝色图片')
-        self.assertEqual(sleeps, [0.5])
+        fallback.assert_called_once()
         self.assertEqual(len(post.call_args_list), 1)
-        self.assertTrue(all(call.kwargs['shard'] == 'shard2' for call in download.call_args_list))
 
-    def test_image_unavailable_stops_without_vision_request(self):
-        download = Mock(return_value=None)
-        env, post, sleeps = self.env(download)
+    def test_image_preview_unavailable_stops_without_vision_request(self):
+        post = Mock()
+        env = dict(os=os, time=types.SimpleNamespace(sleep=lambda *_: None),
+                   bot_url='http://localhost/webhook/wechat', log=Mock(), log_throttled=Mock(),
+                   image_ui_fallback=Mock(return_value=b''),
+                   LOCAL_HTTP=types.SimpleNamespace(post=post))
         self.assertEqual(nested('describe_image', env)({'username': 'peer', 'local_id': 4}), '')
-        self.assertEqual(download.call_count, 8)
-        self.assertEqual(sleeps, [0.5, 1, 2])
         post.assert_not_called()
 
     def test_quoted_image_resolves_svrid_and_delegates(self):
@@ -235,12 +240,13 @@ class MediaFailureLogTests(unittest.TestCase):
         self.assertIn('peer:shard1:7', keys[0], '节流 key 要带消息 id，别把别的消息一起吞掉')
 
     def test_exception_type_is_carried_into_the_error_line(self):
-        # 落盘路径不存在 → getsize 抛 FileNotFoundError，异常类型要能带回消息上
-        missing = str(ROOT / ('missing-image-%s.png' % uuid.uuid4().hex))
+        # 界面兜底抛异常 → 异常类型要能带回消息上，且不发视觉请求
+        def boom(_msg):
+            raise FileNotFoundError('missing preview')
+
         env = dict(os=os, time=types.SimpleNamespace(sleep=lambda *_: None),
                    bot_url='http://localhost/webhook/wechat', log=Mock(), log_throttled=Mock(),
-                   _get_media=lambda: types.SimpleNamespace(download_image=lambda *a, **k: missing),
-                   LOCAL_HTTP=types.SimpleNamespace(post=Mock()))
+                   image_ui_fallback=boom, LOCAL_HTTP=types.SimpleNamespace(post=Mock()))
         msg = {'username': 'peer', 'local_id': 7, 'shard': 'shard1'}
         self.assertEqual(nested('describe_image', env)(msg), '')
         self.assertEqual(msg.get('_media_fail'), 'FileNotFoundError')
