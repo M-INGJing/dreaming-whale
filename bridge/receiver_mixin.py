@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Bridge runtime mixin: ReceiverMixin."""
 import engine as G
+from quote_parser import quote_content_text
 
 
 class ReceiverMixin:
@@ -295,7 +296,16 @@ class ReceiverMixin:
                     media_failed('语音')
                     return
                 content = '（对方发了一条语音，说的是：%s）' % said
-            if mtype not in ('文本', '语音', '图片', '表情', '动画表情'):
+            # 引用回复：微信存的是 appmsg XML（类型名落到「文件/链接/卡片」），
+            # 原来的分支找不到 <url> 就把整条丢掉。这里先拆出被引用原话和新打的字。
+            _quote_text = quote_content_text(content) if mtype not in ('文本', '语音', '图片', '表情', '动画表情') else None
+            _quote_parsed = _quote_text is not None
+            if _quote_parsed:
+                if not _quote_text:
+                    G.log('引用消息里没有可读内容，先不回话')
+                    return
+                content = _quote_text
+            if not _quote_parsed and mtype not in ('文本', '语音', '图片', '表情', '动画表情'):
                 if '移出群聊' in content or '移出' in content:
                     self.dead_chats.add(username)
                     G.log('被移出群聊，停掉这个会话：', self.display_name(username))
