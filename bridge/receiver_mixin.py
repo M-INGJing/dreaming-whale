@@ -89,6 +89,26 @@ class ReceiverMixin:
                     if not account_matches() or win32gui.GetForegroundWindow() != hwnd:
                         G.log('图片预览兜底跳过 reason=account_or_foreground_changed')
                         return b''
+                    # 当前打开的会话不一定是目标会话（截图/点气泡只能对当前会话）：
+                    # 先切过去；切不动就让子进程报 conversation_mismatch 放弃，绝不硬点。
+                    try:
+                        gui = getattr(self, 'gui', None)
+                        if gui is None:
+                            maker = getattr(self, 'WeChatGUI', None)
+                            if maker is not None:
+                                gui = maker()
+                                self.gui = gui
+                        if gui is not None:
+                            try:
+                                self.bind_gui_window(gui)
+                            except Exception:
+                                pass
+                            if gui.open_chat(chat_name):
+                                G.time.sleep(0.35)
+                            else:
+                                G.log('图片预览兜底：切会话没成功（%s）' % chat_name)
+                    except Exception as exc:
+                        G.log('图片预览兜底：切会话异常 %r' % exc)
                     raw = read_image_via_ui(request, G.log)
                     if raw and not account_matches():
                         G.log('图片预览兜底丢弃 reason=account_changed')
