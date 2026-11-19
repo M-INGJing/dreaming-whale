@@ -30,6 +30,26 @@ class ReceiverMixin:
             self._media_box['downloader'] = dl
             return dl
 
+    def ensure_wechat_foreground(self, hwnd, timeout=4.0):
+        """把微信拉到前台并确认，最多试 timeout 秒。
+
+        用户正在打字时前台锁经常拒绝一两次，单次 force_foreground 失败就放弃
+        会让引用图片/新图片在这段时间里全部读不到。"""
+        try:
+            import time as _t
+            deadline = _t.time() + timeout
+            while _t.time() < deadline:
+                try:
+                    if self.force_foreground(hwnd):
+                        return True
+                except Exception:
+                    pass
+                _t.sleep(0.35)
+            import win32gui
+            return win32gui.GetForegroundWindow() == int(hwnd)
+        except Exception:
+            return False
+
     def image_ui_fallback(self, msg):
         """磁盘图片解不开时的界面兜底：核实账号后，在限时子进程内读取微信预览。
 
@@ -64,11 +84,7 @@ class ReceiverMixin:
                 return b''
             # 收到图片时前台可能是别的窗口（用户在浏览器/命令行里）：像发送那样
             # 先把微信拉到前台并确认到位，再让子进程去点气泡截图。
-            try:
-                self.force_foreground(hwnd)
-            except Exception:
-                pass
-            if win32gui.GetForegroundWindow() != hwnd:
+            if not self.ensure_wechat_foreground(hwnd):
                 G.log('图片预览兜底跳过 reason=wechat_not_foreground')
                 return b''
             chat_name = self.display_name(msg.get('username') or '')
@@ -200,6 +216,10 @@ class ReceiverMixin:
                 return ''
             raw = self.image_ui_fallback(msg)
             if not raw:
+                G.log('图片预览兜底没取到（消息id=%s），1.5 秒后重试一次' % lid)
+                G.time.sleep(1.5)
+                raw = self.image_ui_fallback(msg)
+            if not raw:
                 G.log('图片预览兜底没取到（消息id=%s），这条不回话' % lid)
                 return ''
             text = self._recognize_image(raw)
@@ -248,11 +268,7 @@ class ReceiverMixin:
             if not account_matches():
                 G.log('引用图片兜底跳过 reason=account_unverified')
                 return b''
-            try:
-                self.force_foreground(hwnd)
-            except Exception:
-                pass
-            if win32gui.GetForegroundWindow() != hwnd:
+            if not self.ensure_wechat_foreground(hwnd):
                 G.log('引用图片兜底跳过 reason=wechat_not_foreground')
                 return b''
             chat_name = self.display_name(quote_msg.get('username') or '')
@@ -320,6 +336,10 @@ class ReceiverMixin:
             return ''
         if quote_msg is not None:
             raw = self.image_ui_quote_fallback(quote_msg)
+            if not raw:
+                G.log('引用图片兜底没取到图，1.5 秒后重试一次')
+                G.time.sleep(1.5)
+                raw = self.image_ui_quote_fallback(quote_msg)
             if raw:
                 text = self._recognize_image(raw)
                 if not text:
