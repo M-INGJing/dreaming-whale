@@ -186,7 +186,9 @@ class ReceiverMixin:
                 parts = [raw]
             texts = []
             for idx, part in enumerate(parts):
-                prompt = ''
+                # 空 prompt 时视觉接口对部分截图（长图/信息密集）会返回空文本，
+                # 实测同一张图带指令就稳定出结果，所以默认也给一句。
+                prompt = '描述这张图片的内容：画面主体、场景，并转写图中关键文字。'
                 if len(parts) > 1:
                     prompt = '这是一张长截图从上往下的第 %d/%d 段。逐条转写这一段里的文字（分清左边对方/右边本人），不要省略。' % (idx + 1, len(parts))
                 r = G.LOCAL_HTTP.post(base + '/api/vision', json={'image': base64.b64encode(part).decode(), 'mime': mime, 'prompt': prompt}, timeout=120)
@@ -214,21 +216,18 @@ class ReceiverMixin:
             lid = msg.get('local_id')
             if not user or lid is None:
                 return ''
-            raw = self.image_ui_fallback(msg)
-            if not raw:
-                G.log('图片预览兜底没取到（消息id=%s），1.5 秒后重试一次' % lid)
-                G.time.sleep(1.5)
+            text = ''
+            for _i in range(3):
                 raw = self.image_ui_fallback(msg)
-            if not raw:
-                G.log('图片预览兜底没取到（消息id=%s），这条不回话' % lid)
-                return ''
-            text = self._recognize_image(raw)
-            if not text:
-                G.log('图片识别为空，1.5 秒后重截一次（消息id=%s）' % lid)
-                G.time.sleep(1.5)
-                raw2 = self.image_ui_fallback(msg)
-                if raw2:
-                    text = self._recognize_image(raw2)
+                if raw:
+                    text = self._recognize_image(raw)
+                    if text:
+                        break
+                    G.log('图片识别为空（第 %d/3 次），1.5 秒后重试（消息id=%s）' % (_i + 1, lid))
+                else:
+                    G.log('图片兜底没取到图（第 %d/3 次），1.5 秒后重试（消息id=%s）' % (_i + 1, lid))
+                if _i < 2:
+                    G.time.sleep(1.5)
             if not text:
                 G.log('图片识别失败（消息id=%s），这条不回话' % lid)
                 return ''
@@ -335,24 +334,23 @@ class ReceiverMixin:
             G.log('引用图片反查不到 server_id=%s（会话 %s）' % (svrid, username))
             return ''
         if quote_msg is not None:
-            raw = self.image_ui_quote_fallback(quote_msg)
-            if not raw:
-                G.log('引用图片兜底没取到图，1.5 秒后重试一次')
-                G.time.sleep(1.5)
+            text = ''
+            for _i in range(3):
                 raw = self.image_ui_quote_fallback(quote_msg)
-            if raw:
-                text = self._recognize_image(raw)
-                if not text:
-                    G.log('引用图片识别为空，1.5 秒后重试一次')
+                if raw:
+                    text = self._recognize_image(raw)
+                    if text:
+                        break
+                    G.log('引用图片识别为空（第 %d/3 次），1.5 秒后重试' % (_i + 1))
+                else:
+                    G.log('引用图片兜底没取到图（第 %d/3 次），1.5 秒后重试' % (_i + 1))
+                if _i < 2:
                     G.time.sleep(1.5)
-                    raw2 = self.image_ui_quote_fallback(quote_msg)
-                    if raw2:
-                        text = self._recognize_image(raw2)
-                if text:
-                    if len(text) > 1200:
-                        text = text[:1200] + '…'
-                    G.log('引用图片识别：', text[:80])
-                    return text
+            if text:
+                if len(text) > 1200:
+                    text = text[:1200] + '…'
+                G.log('引用图片识别：', text[:80])
+                return text
         lid = hit.get('local_id')
         if lid is None:
             return ''
@@ -496,6 +494,13 @@ class ReceiverMixin:
                 return
             mtype = msg.get('type') or ''
             content = G.fix_garbled((msg.get('content') or '').strip())
+            # 群聊正文统一带「发送者wxid:」前缀：所有类型都先剥掉，
+            # 否则引用解析、链接提取、发给模型的文本都会带着它。
+            if username.endswith('@chatroom'):
+                try:
+                    content = G._GROUP_SENDER_PREFIX_RE.sub('', content, count=1).strip()
+                except Exception:
+                    pass
             is_emoji = mtype in ('表情', '动画表情') or (mtype == '图片' and '<emoji' in content)
             if is_emoji:
                 desc = self.describe_emoji(msg)

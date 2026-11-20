@@ -47,6 +47,11 @@ def parse_quote_ref(content):
     if '<refermsg' not in str(content or ''):
         return None
     content = str(content)
+    # 群聊的 content 前面带「发送者wxid:」前缀，直接 fromstring 会解析失败，
+    # 于是整条引用被当成普通 appmsg 丢掉。从第一个 '<' 开始截。
+    start = content.find('<')
+    if start > 0:
+        content = content[start:]
     end = content.rfind('</msg>')
     if end < 0:
         return None
