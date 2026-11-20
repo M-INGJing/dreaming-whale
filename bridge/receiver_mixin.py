@@ -30,6 +30,47 @@ class ReceiverMixin:
             self._media_box['downloader'] = dl
             return dl
 
+    def _switch_to_chat(self, uia, aliases, chat_name):
+        """切到目标会话，返回微信实际显示的会话名；切不过去返回 ''。
+
+        没命名的群 display_name 只有原始 id，而 open_chat 只收单个名字、且会话列表
+        里的显示名是「成员甲、成员乙」（顺序还未必和数据库一致），所以按别名逐个
+        试，命中判定用 _chat_identity_level（成员集合吻合也算命中）。
+        """
+        def cur_name():
+            try:
+                return (uia.current_chat() or '').strip()
+            except Exception:
+                return ''
+
+        def hit(name):
+            if not name:
+                return False
+            if name == chat_name or name in aliases:
+                return True
+            try:
+                return G._chat_identity_level(name, list(aliases or []) + ([chat_name] if chat_name else [])) is not None
+            except Exception:
+                return False
+
+        cur = cur_name()
+        if hit(cur):
+            return cur
+        for name in list(aliases or []) + ([chat_name] if chat_name else []):
+            if not name:
+                continue
+            try:
+                uia.open_chat(name)
+            except Exception:
+                continue
+            G.time.sleep(0.35)
+            cur = cur_name()
+            if hit(cur):
+                return cur
+        cur = cur_name()
+        return cur if hit(cur) else ''
+
+
     def ensure_wechat_foreground(self, hwnd, timeout=4.0):
         """把微信拉到前台并确认，最多试 timeout 秒。
 
@@ -88,6 +129,11 @@ class ReceiverMixin:
                 G.log('图片预览兜底跳过 reason=wechat_not_foreground')
                 return b''
             chat_name = self.display_name(msg.get('username') or '')
+            aliases = [chat_name]
+            try:
+                aliases = self.aliases_for(msg.get('username') or '', chat_name) or aliases
+            except Exception:
+                pass
             request = build_preview_request(db, msg, chat_name, hwnd, pid)
             if request is None:
                 G.log('图片预览兜底跳过 reason=message_not_unique')
@@ -119,10 +165,12 @@ class ReceiverMixin:
                                 self.bind_gui_window(gui)
                             except Exception:
                                 pass
-                            if gui.open_chat(chat_name):
-                                G.time.sleep(0.35)
-                            else:
-                                G.log('图片预览兜底：切会话没成功（%s）' % chat_name)
+                            uia = gui._get_uia()
+                            actual = self._switch_to_chat(uia, aliases, chat_name)
+                            if not actual:
+                                G.log('图片预览兜底：切会话失败（%s）' % chat_name)
+                                return b''
+                            request['chat'] = actual
                     except Exception as exc:
                         G.log('图片预览兜底：切会话异常 %r' % exc)
                     raw = read_image_via_ui(request, G.log)
@@ -271,6 +319,11 @@ class ReceiverMixin:
                 G.log('引用图片兜底跳过 reason=wechat_not_foreground')
                 return b''
             chat_name = self.display_name(quote_msg.get('username') or '')
+            aliases = [chat_name]
+            try:
+                aliases = self.aliases_for(quote_msg.get('username') or '', chat_name) or aliases
+            except Exception:
+                pass
             request = build_quote_request(db, quote_msg, chat_name, hwnd, pid)
             if request is None:
                 G.log('引用图片兜底跳过 reason=message_not_unique')
@@ -298,8 +351,12 @@ class ReceiverMixin:
                                 self.bind_gui_window(gui)
                             except Exception:
                                 pass
-                            if gui.open_chat(chat_name):
-                                G.time.sleep(0.35)
+                            uia = gui._get_uia()
+                            actual = self._switch_to_chat(uia, aliases, chat_name)
+                            if not actual:
+                                G.log('引用图片兜底：切会话失败（%s）' % chat_name)
+                                return b''
+                            request['chat'] = actual
                     except Exception as exc:
                         G.log('引用图片兜底：切会话异常 %r' % exc)
                     raw = read_image_via_ui(request, G.log)
