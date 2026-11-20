@@ -23,6 +23,22 @@ class PreviewUnavailable(RuntimeError):
     pass
 
 
+def _group_content(username, content):
+    """群聊消息的 content 前面带「发送者wxid:」前缀，界面上没有这一段。
+
+    对齐是拿数据库正文和 UIA 行名做比对，前缀不去掉就一条都锚不上
+    （私聊没有这个前缀，所以私聊正常、群聊全挂）。
+    """
+    text = str(content or '')
+    if not (username or '').endswith('@chatroom'):
+        return text
+    head, sep, rest = text.partition(':\n')
+    if sep and 0 < len(head) <= 80 and ' ' not in head and '\n' not in head:
+        return rest
+    return text
+
+
+
 def build_preview_request(db, msg, chat_name, hwnd, pid):
     """只传定位所需的消息摘要。用独立序号避免不同分片的同号图片错配。"""
     username, local_id = msg.get('username'), msg.get('local_id')
@@ -33,7 +49,7 @@ def build_preview_request(db, msg, chat_name, hwnd, pid):
     sequence, targets = [], []
     for row in reversed(db.get_messages(username, limit=MAX_HISTORY)):
         kind = {'文本': 'text', '图片': 'image'}.get(row.get('type'))
-        content = str(row.get('content') or '')
+        content = _group_content(username, row.get('content'))
         if kind is None and '<title>' in content:
             # 引用/卡片类 appmsg 在界面上就是一行文字（标题 + 引用块），
             # 序列里必须按文本对待；否则可视行比序列多一行，对齐全错位。
@@ -248,7 +264,7 @@ def build_quote_request(db, quote_msg, chat_name, hwnd, pid):
     sequence, targets = [], []
     for row in reversed(db.get_messages(username, limit=MAX_HISTORY)):
         kind = {'文本': 'text', '图片': 'image'}.get(row.get('type'))
-        content = str(row.get('content') or '')
+        content = _group_content(username, row.get('content'))
         if kind is None and '<title>' in content:
             import re as _re
             import html as _html
